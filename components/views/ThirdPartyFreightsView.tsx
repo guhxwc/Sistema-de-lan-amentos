@@ -11,7 +11,7 @@ import { Card, CardContent } from '../ui/Card';
 import { Select } from '../ui/Select';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type } from "@google/genai";
 
 const calculateStatus = (paidFreight: number, advance: number, toll: number): 'Pago' | 'Parcial' | 'Pendente' => {
     const balance = paidFreight - advance - toll;
@@ -76,7 +76,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
       .from('third_party_freights')
       .select('*')
       .order('date', { ascending: false })
-      .order('created_at', { ascending: false }); // Ordenação secundária para estabilidade
+      .order('created_at', { ascending: false }); 
 
     if (error) {
       alert(`Erro ao buscar fretes de terceiros: ${error.message}`);
@@ -84,7 +84,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
       const dataList = data || [];
       setFreights(dataList);
       
-      // Clean up selection for items that no longer exist
       setSelectedFreights(prev => {
         const newSet = new Set<string>();
         const currentIds = new Set(dataList.map(f => f.id));
@@ -98,7 +97,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
 
   const fetchAutocompleteData = useCallback(async () => {
     try {
-        // 1. Busca valores distintos já existentes na tabela principal (Legado/Ativos)
         const [
             driversDB, platesDB, originsDB, destinationsDB
         ] = await Promise.all([
@@ -108,7 +106,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
           getDistinctValues('third_party_freights', 'destination'),
         ]);
 
-        // 2. Busca valores salvos explicitamente na tabela 'saved_entries' (Persistência DB)
         const [
             driversSavedDB, platesSavedDB, originsSavedDB, destinationsSavedDB
         ] = await Promise.all([
@@ -118,13 +115,11 @@ export const ThirdPartyFreightsView: React.FC = () => {
           getSavedAutocompleteValues('destination')
         ]);
 
-        // 3. Busca valores salvos no LocalStorage (Persistência Local/Backup)
         const driversLocal = getFromLocalStorage('tp_saved_drivers');
         const platesLocal = getFromLocalStorage('tp_saved_plates');
         const originsLocal = getFromLocalStorage('tp_saved_origins');
         const destinationsLocal = getFromLocalStorage('tp_saved_destinations');
 
-        // Mescla todas as fontes e remove duplicatas
         setSavedDrivers(Array.from(new Set([...driversDB, ...driversSavedDB, ...driversLocal])).sort());
         setSavedLicensePlates(Array.from(new Set([...platesDB, ...platesSavedDB, ...platesLocal])).sort());
         setSavedOrigins(Array.from(new Set([...originsDB, ...originsSavedDB, ...originsLocal])).sort());
@@ -165,7 +160,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
         const tollValue = Number(f.toll_value) || 0;
         const advance = Number(f.advance_payment) || 0;
 
-        // Profit = Revenue - Cost (Paid Freight is Gross)
         acc.totalNetProfit += companyFreight - paidFreight;
         
         const balanceToPay = paidFreight - advance - tollValue;
@@ -177,7 +171,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
   }, [freights]);
 
   const saveSuggestions = async (freight: ThirdPartyFreight) => {
-      // Salva no Banco de Dados (tabela saved_entries)
       await Promise.all([
           saveAutocompleteValue('driver', freight.driver),
           saveAutocompleteValue('license_plate', freight.license_plate),
@@ -185,7 +178,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
           saveAutocompleteValue('destination', freight.destination)
       ]);
 
-      // Salva no LocalStorage (Backup local garantido)
       addToLocalStorage('tp_saved_drivers', freight.driver);
       addToLocalStorage('tp_saved_plates', freight.license_plate);
       addToLocalStorage('tp_saved_origins', freight.origin);
@@ -244,13 +236,9 @@ export const ThirdPartyFreightsView: React.FC = () => {
       console.error("Erro ao processar XML:", error);
       
       let errorMessage = "Erro ao processar XML. Verifique se é um arquivo válido.";
-      
-      if (error.message?.includes('429') || error.status === 429 || error.message?.includes('Resource has been exhausted')) {
-         errorMessage = "Limite de uso da IA excedido (Erro 429). A cota da API foi atingida. Por favor, aguarde alguns instantes e tente novamente ou preencha os campos manualmente.";
-      } else if (error.message) {
-         errorMessage += ` Detalhes: ${error.message}`;
+      if (error.message?.includes('429')) {
+         errorMessage = "Limite de uso da IA excedido (Erro 429). Aguarde alguns instantes.";
       }
-      
       alert(errorMessage);
     } finally {
       setIsProcessingXml(false);
@@ -284,9 +272,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
     if (error) {
         alert(`Erro ao adicionar frete: ${error.message}`);
     } else {
-        // Salvar dados para autocompletar futuro (Persistência)
         await saveSuggestions(freightToAdd);
-
         alert('Frete de terceiro adicionado com sucesso!');
         setNewFreight(getInitialThirdPartyFreight());
         fetchFreights();
@@ -318,7 +304,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
         alert(`Erro ao atualizar frete: ${error.message}`);
     } else {
         await saveSuggestions(freightWithCorrectStatus);
-
         alert('Frete atualizado com sucesso.');
         setEditingFreight(null);
         fetchFreights();
@@ -332,7 +317,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
       if (error) {
           alert(`Erro ao excluir frete: ${error.message}`);
       } else {
-          alert('Frete excluído com sucesso. Os dados do motorista/placa permanecem salvos para uso futuro.');
+          alert('Frete excluído com sucesso.');
           fetchFreights();
           fetchAutocompleteData();
       }
@@ -359,7 +344,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
     }
   }, [freights, fetchFreights]);
 
-  // --- Selection Handlers ---
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedFreights(prev => {
       const newSet = new Set(prev);
@@ -377,17 +361,13 @@ export const ThirdPartyFreightsView: React.FC = () => {
     }
   }, [filteredFreights]);
 
-  // --- PDF Generation ---
   const handleGeneratePDF = useCallback(() => {
     if (selectedFreights.size === 0) return;
 
     const selectedItems = freights.filter(f => selectedFreights.has(f.id));
-    
-    // Initialize PDF in Landscape for table space
     const doc = new jsPDF({ orientation: 'landscape' });
-    const primaryColor = [2, 132, 199]; // sky-600
+    const primaryColor = [2, 132, 199]; 
 
-    // Header
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.setTextColor(40, 40, 40);
@@ -400,13 +380,11 @@ export const ThirdPartyFreightsView: React.FC = () => {
     doc.text(`Gerado em: ${dateStr}`, 14, 26);
     doc.text(`Itens selecionados: ${selectedItems.length}`, 14, 31);
 
-    // Totals for footer
     let totalPaid = 0;
     let totalToll = 0;
     let totalAdvance = 0;
     let totalBalance = 0;
 
-    // Prepare Data
     const tableData = selectedItems.map(f => {
         const paid = Number(f.paid_freight_value) || 0;
         const toll = Number(f.toll_value) || 0;
@@ -416,7 +394,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
         totalPaid += paid;
         totalToll += toll;
         totalAdvance += advance;
-        totalBalance += balance > 0 ? balance : 0; // Only sum positive balances for "To Pay"
+        totalBalance += balance > 0 ? balance : 0; 
 
         const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '-';
         const formatMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -443,12 +421,12 @@ export const ThirdPartyFreightsView: React.FC = () => {
         headStyles: { fillColor: primaryColor as any, textColor: 255, fontStyle: 'bold' },
         styles: { fontSize: 9, cellPadding: 3, valign: 'middle' },
         columnStyles: {
-            0: { cellWidth: 25 }, // Data
-            3: { cellWidth: 60 }, // Rota
-            4: { halign: 'right' }, // Frete
-            5: { halign: 'right' }, // Pedágio
-            6: { halign: 'right' }, // Adiantamento
-            7: { halign: 'right', fontStyle: 'bold' }  // Saldo
+            0: { cellWidth: 25 }, 
+            3: { cellWidth: 60 }, 
+            4: { halign: 'right' }, 
+            5: { halign: 'right' }, 
+            6: { halign: 'right' }, 
+            7: { halign: 'right', fontStyle: 'bold' }  
         },
         foot: [[
             'TOTAIS', '', '', '', 
@@ -460,7 +438,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
         footStyles: { fillColor: [240, 240, 240], textColor: 50, fontStyle: 'bold', halign: 'right' }
     });
 
-    // Footer Page Info
     const pageCount = (doc as any).internal.getNumberOfPages();
     doc.setFontSize(8);
     for(let i = 1; i <= pageCount; i++) {

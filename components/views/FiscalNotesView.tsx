@@ -10,7 +10,7 @@ import { Card, CardContent } from '../ui/Card';
 import { Select } from '../ui/Select';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type } from "@google/genai";
 import JSZip from 'jszip';
 
 const getInitialNote = (): FiscalNote => ({
@@ -36,7 +36,6 @@ export const FiscalNotesView: React.FC = () => {
   const [isProcessingZip, setIsProcessingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState('');
 
-  // Filters
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [filterClientDelivered, setFilterClientDelivered] = useState('Todos');
 
@@ -45,12 +44,11 @@ export const FiscalNotesView: React.FC = () => {
       .from('fiscal_notes')
       .select('*')
       .order('shipping_date', { ascending: false })
-      .order('created_at', { ascending: false }); // Ordenação secundária para estabilidade
+      .order('created_at', { ascending: false }); 
     if (error) {
       alert(`Erro ao buscar notas: ${error.message}`);
     } else {
       setNotes(data || []);
-      // Manter seleção válida apenas para itens que ainda existem
       setSelectedNotes(prev => {
         const newSet = new Set<string>();
         if (data) {
@@ -71,18 +69,15 @@ export const FiscalNotesView: React.FC = () => {
           getDistinctValues('fiscal_notes', 'delivery_location'),
         ]);
         
-        // Carregar do LocalStorage para persistência mesmo após exclusão
         const localCompanies = JSON.parse(localStorage.getItem('fiscal_saved_companies') || '[]');
         const localLocations = JSON.parse(localStorage.getItem('fiscal_saved_locations') || '[]');
 
-        // Mesclar dados do banco com dados locais e remover duplicatas
         const uniqueCompanies = Array.from(new Set([...companies, ...localCompanies])).sort();
         const uniqueLocations = Array.from(new Set([...locations, ...localLocations])).sort();
 
         setSavedCompanies(uniqueCompanies);
         setSavedLocations(uniqueLocations);
 
-        // Atualizar LocalStorage com a união para garantir que novos itens do banco sejam persistidos localmente
         localStorage.setItem('fiscal_saved_companies', JSON.stringify(uniqueCompanies));
         localStorage.setItem('fiscal_saved_locations', JSON.stringify(uniqueLocations));
 
@@ -135,37 +130,13 @@ export const FiscalNotesView: React.FC = () => {
   const extractDataFromXml = async (xmlContent: string) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Atualizado para extrair APENAS o número da NF (nNF) e ignorar a série e remover zeros a esquerda
-    // Atualizado para extrair Nome do Destinatário/Recebedor ao invés da cidade
-    const prompt = `Atue como um especialista em processamento de XML de documentos fiscais brasileiros (CT-e e NF-e).
+    const prompt = `Atue como especialista em XML fiscal. Retorne um JSON com as chaves: "company", "nf_number", "delivery_location", "shipping_date".
       
-      Regras RÍGIDAS para extração de dados:
-      
-      1. **company** (Empresa/Cliente):
-         - Se o XML for um **CT-e** (Conhecimento de Transporte): Extraia o nome do **REMETENTE** (tag <rem><xNome>).
-           **ATENÇÃO:** JAMAIS extraia o nome do Emitente (<emit>), pois em um CT-e o emitente é a transportadora.
-         - Se o XML for uma **NF-e** (Nota Fiscal): Extraia o nome do **EMITENTE** (tag <emit><xNome>).
-      
-      2. **delivery_location** (Local de Entrega):
-         - **Prioridade 1:** Se houver um **RECEBEDOR** identificado (tag <receb>), extraia o **NOME** (<xNome>) dentro de <receb>.
-         - **Prioridade 2:** Caso contrário, extraia o **NOME** (<xNome>) do **DESTINATÁRIO** dentro de <dest>.
-         - **IMPORTANTE:** Extraia o NOME da empresa/pessoa, **NÃO** extraia a cidade/município.
-      
-      3. **nf_number** (Número da NF):
-         - Extraia APENAS o **Número da Nota Fiscal** (nNF).
-         - **IMPORTANTE**:
-           - NÃO inclua a série.
-           - NÃO extraia o número do CT-e (<nCT>).
-           - **REMOVA zeros à esquerda**. Exemplo: "000008348" deve ser retornado como "8348".
-         - Se for **NF-e**: Extraia o conteúdo de <nNF>.
-         - Se for **CT-e**: Procure pela chave de acesso da NF-e referenciada na tag <infNFe>.
-           - Na chave de 44 dígitos, o número da NF está nas posições **26 a 34** (9 dígitos).
-           - Exemplo: Na chave "...55001000028496...", o número é "000028496". Retorne "28496".
-      
-      4. **shipping_date** (Data):
-         - Extraia a data de emissão (<dhEmi>). Formato: AAAA-MM-DD.
-
-      Retorne APENAS um objeto JSON com as chaves: company, nf_number, delivery_location, shipping_date.
+      Regras:
+      1. company: Remetente do CT-e (<rem><xNome>) ou Emitente da NF-e (<emit><xNome>).
+      2. delivery_location: Recebedor (<receb><xNome>) ou Destinatário (<dest><xNome>). NOME, não cidade.
+      3. nf_number: Apenas o número da NF (sem série, sem zeros a esquerda). Em CT-e procure na chave de acesso (<infNFe>).
+      4. shipping_date: Emissão (<dhEmi>) AAAA-MM-DD.
       
       XML:
       ${xmlContent}`;
@@ -197,7 +168,6 @@ export const FiscalNotesView: React.FC = () => {
       const xmlContent = await file.text();
       const parsedData = await extractDataFromXml(xmlContent);
 
-      // Limpar zeros à esquerda se houver
       const cleanNfNumber = parsedData.nf_number ? parsedData.nf_number.replace(/^0+/, '') : '';
 
       setNewNote(prev => ({
@@ -214,7 +184,7 @@ export const FiscalNotesView: React.FC = () => {
       console.error("Erro ao processar XML com IA:", error);
       let errorMessage = "Ocorreu um erro ao processar o arquivo XML.";
       if (error.message?.includes('429')) {
-         errorMessage = "Limite de uso da IA excedido. Aguarde alguns instantes e tente novamente.";
+         errorMessage = "Limite de uso da IA excedido. Aguarde alguns instantes.";
       }
       alert(errorMessage);
     } finally {
@@ -230,7 +200,6 @@ export const FiscalNotesView: React.FC = () => {
         const content = await zip.loadAsync(file);
         const xmlFiles: string[] = [];
         
-        // Coleta todos os arquivos XML
         for (const [filename, fileData] of Object.entries(content.files)) {
             const zipEntry = fileData as any;
             if (!zipEntry.dir && filename.toLowerCase().endsWith('.xml')) {
@@ -248,20 +217,15 @@ export const FiscalNotesView: React.FC = () => {
         let successCount = 0;
         let duplicateCount = 0;
 
-        // Processa sequencialmente para não estourar rate limit da IA
         for (let i = 0; i < xmlFiles.length; i++) {
             setZipProgress(`Processando ${i + 1}/${xmlFiles.length}...`);
             try {
-                // Pequeno delay para ser gentil com a API
                 if (i > 0) await new Promise(r => setTimeout(r, 1000));
                 
                 const data = await extractDataFromXml(xmlFiles[i]);
                 if (data && data.company && data.nf_number) {
-                     // Limpar zeros à esquerda se houver
                      const cleanNfNumber = data.nf_number.replace(/^0+/, '');
 
-                     // VERIFICAÇÃO DE DUPLICIDADE (ZIP)
-                     // Verifica se já existe na base ou se já foi adicionado na lista de inserção atual
                      const isDuplicateInDb = notes.some(n => n.nf_number === cleanNfNumber);
                      const isDuplicateInBatch = notesToAdd.some(n => n.nf_number === cleanNfNumber);
 
@@ -275,7 +239,7 @@ export const FiscalNotesView: React.FC = () => {
                         nf_number: cleanNfNumber,
                         delivery_location: data.delivery_location?.trim().toUpperCase() || '',
                         shipping_date: data.shipping_date || new Date().toISOString().split('T')[0],
-                        status: 'Pendente', // Padrão
+                        status: 'Pendente',
                         client_delivered: false
                      });
                      successCount++;
@@ -293,7 +257,6 @@ export const FiscalNotesView: React.FC = () => {
                  throw error;
             }
 
-            // Atualiza autocompletar localmente
             notesToAdd.forEach(n => {
                 if(n.company) addToLocalStorage('fiscal_saved_companies', n.company);
                 if(n.delivery_location) addToLocalStorage('fiscal_saved_locations', n.delivery_location);
@@ -328,7 +291,6 @@ export const FiscalNotesView: React.FC = () => {
         return;
     }
 
-    // VERIFICAÇÃO DE DUPLICIDADE (Manual)
     const isDuplicate = notes.some(n => n.nf_number === newNote.nf_number);
     if (isDuplicate) {
         alert('Erro: Já existe uma nota fiscal cadastrada com este número.');
@@ -349,7 +311,6 @@ export const FiscalNotesView: React.FC = () => {
     if (error) {
         alert(`Erro ao adicionar nota: ${error.message}`);
     } else {
-        // Salvar explicitamente no LocalStorage
         addToLocalStorage('fiscal_saved_companies', companyClean);
         if (locationClean) addToLocalStorage('fiscal_saved_locations', locationClean);
 
@@ -378,13 +339,10 @@ export const FiscalNotesView: React.FC = () => {
 
         alert('Notas selecionadas excluídas com sucesso!');
         
-        // Atualização imediata da UI para remover os itens excluídos
         setNotes(prev => prev.filter(note => !selectedNotes.has(note.id)));
-        setSelectedNotes(new Set()); // Limpa seleção
+        setSelectedNotes(new Set()); 
         
-        // Recarrega dados para garantir sincronia com o servidor
         await fetchNotes();
-        // fetchAutocompleteData manterá os dados antigos pois estão no LocalStorage
         await fetchAutocompleteData();
       } catch (error: any) {
         console.error("Erro ao excluir notas:", error);
@@ -394,8 +352,6 @@ export const FiscalNotesView: React.FC = () => {
   };
   
   const handleUpdateNote = useCallback(async (updatedNote: FiscalNote) => {
-    // Ao editar, verificamos duplicidade apenas se o número mudou
-    // Mas precisamos ignorar a própria nota que está sendo editada
     const isDuplicate = notes.some(n => n.nf_number === updatedNote.nf_number && n.id !== updatedNote.id);
     if (isDuplicate) {
         alert('Erro: Já existe outra nota fiscal cadastrada com este número.');
@@ -414,7 +370,6 @@ export const FiscalNotesView: React.FC = () => {
     if (error) {
         alert(`Erro ao atualizar nota: ${error.message}`);
     } else {
-        // Salvar explicitamente no LocalStorage
         addToLocalStorage('fiscal_saved_companies', companyClean);
         if (locationClean) addToLocalStorage('fiscal_saved_locations', locationClean);
 
@@ -451,7 +406,6 @@ export const FiscalNotesView: React.FC = () => {
     }
   }, [notes, fetchNotes]);
 
-  // Selection Logic
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedNotes(prev => {
       const newSet = new Set(prev);
@@ -473,7 +427,6 @@ export const FiscalNotesView: React.FC = () => {
     }
   }, [filteredNotes]);
 
-  // PDF Generation Logic
   const handleGeneratePDF = useCallback(() => {
     if (selectedNotes.size === 0) {
       alert("Selecione pelo menos uma nota para gerar o PDF.");
@@ -483,36 +436,29 @@ export const FiscalNotesView: React.FC = () => {
     const notesToPrint = notes.filter(n => selectedNotes.has(n.id));
     const doc = new jsPDF();
 
-    // Configurações visuais
-    const primaryColor = [2, 132, 199]; // sky-600 equivalent
-    const titleFontSize = 18;
-    const subtitleFontSize = 10;
+    const primaryColor = [2, 132, 199]; 
     
-    // Header
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(titleFontSize);
+    doc.setFontSize(18);
     doc.setTextColor(40, 40, 40);
     doc.text("Relatório de Notas Fiscais", 14, 20);
     
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(subtitleFontSize);
+    doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     const dateStr = new Date().toLocaleDateString('pt-BR');
     doc.text(`Gerado em: ${dateStr}`, 14, 26);
     doc.text(`Total de itens: ${notesToPrint.length}`, 14, 31);
 
-    // Linha divisória
     doc.setDrawColor(200, 200, 200);
     doc.line(14, 35, 196, 35);
 
-    // Formatar data para a tabela
     const formatTableDate = (dateString: string) => {
         if (!dateString) return '-';
         const [year, month, day] = dateString.split('-');
         return `${day}/${month}/${year}`;
     };
 
-    // Tabela
     const tableData = notesToPrint.map(note => [
       note.company,
       formatTableDate(note.shipping_date),
@@ -539,38 +485,36 @@ export const FiscalNotesView: React.FC = () => {
         textColor: 50
       },
       columnStyles: {
-        0: { cellWidth: 'auto' }, // Empresa
-        1: { halign: 'center' }, // Data
-        2: { halign: 'center' }, // NF
-        3: { halign: 'center', fontStyle: 'bold' }, // Status
-        4: { halign: 'center', fontStyle: 'bold' }, // Entregue Cliente
-        5: { cellWidth: 'auto' } // Local
+        0: { cellWidth: 'auto' }, 
+        1: { halign: 'center' }, 
+        2: { halign: 'center' }, 
+        3: { halign: 'center', fontStyle: 'bold' }, 
+        4: { halign: 'center', fontStyle: 'bold' }, 
+        5: { cellWidth: 'auto' } 
       },
       alternateRowStyles: {
         fillColor: [245, 250, 255]
       },
       didParseCell: function(data) {
-        // Customizar cor do texto do status
         if (data.section === 'body') {
             if (data.column.index === 3) {
                 if (data.cell.raw === 'Entregue') {
-                    data.cell.styles.textColor = [16, 185, 129]; // Emerald
+                    data.cell.styles.textColor = [16, 185, 129]; 
                 } else {
-                    data.cell.styles.textColor = [217, 119, 6]; // Amber
+                    data.cell.styles.textColor = [217, 119, 6]; 
                 }
             }
             if (data.column.index === 4) {
                  if (data.cell.raw === 'SIM') {
-                    data.cell.styles.textColor = [13, 148, 136]; // Teal
+                    data.cell.styles.textColor = [13, 148, 136]; 
                 } else {
-                    data.cell.styles.textColor = [156, 163, 175]; // Gray
+                    data.cell.styles.textColor = [156, 163, 175]; 
                 }
             }
         }
       }
     });
 
-    // Footer (Opcional)
     const pageCount = (doc as any).internal.getNumberOfPages();
     doc.setFontSize(8);
     for(let i = 1; i <= pageCount; i++) {
