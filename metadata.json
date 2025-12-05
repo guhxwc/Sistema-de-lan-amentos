@@ -1,0 +1,5 @@
+{
+  "name": "Sistema de Lançamentos de Viagens",
+  "description": "Um sistema moderno para transportadoras gerenciarem lançamentos de viagens, incluindo fretes, despesas, abastecimentos e lucros.",
+  "requestFramePermissions": []
+}
