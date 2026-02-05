@@ -14,10 +14,10 @@ function App() {
   const [activeView, setActiveView] = useState<View>('trips');
 
   return (
-    <div className="flex h-screen bg-slate-200 overflow-hidden">
+    <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
       <NavSidebar activeView={activeView} setActiveView={setActiveView} />
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        
+      
+      <div className="flex-1 flex flex-col overflow-hidden relative bg-slate-100">
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
           {activeView === 'trips' && <TripManagementView />}
           {activeView === 'settlements' && <SettlementView />}
