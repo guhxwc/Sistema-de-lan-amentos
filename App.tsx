@@ -14,18 +14,18 @@ function App() {
   const [activeView, setActiveView] = useState<View>('trips');
 
   return (
-    <div className="flex h-screen bg-slate-200 overflow-hidden">
+    <div className="flex h-screen w-full bg-slate-100 overflow-hidden">
       <NavSidebar activeView={activeView} setActiveView={setActiveView} />
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        
-        <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+      
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <main className="flex-1 overflow-hidden relative w-full h-full">
           {activeView === 'trips' && <TripManagementView />}
           {activeView === 'settlements' && <SettlementView />}
           {activeView === 'receivables' && <ReceivablesView />}
           {activeView === 'fiscalNotes' && <FiscalNotesView />}
           {activeView === 'thirdPartyFreights' && <ThirdPartyFreightsView />}
           {activeView === 'dashboard' && <DashboardView />}
-        </div>
+        </main>
       </div>
     </div>
   );
