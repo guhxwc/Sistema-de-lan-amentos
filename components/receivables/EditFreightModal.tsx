@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { ReceivableFreight } from '../../types';
 import { Card, CardContent, CardHeader } from '../ui/Card';
@@ -44,6 +45,7 @@ export const EditFreightModal: React.FC<EditFreightModalProps> = ({ freight, onS
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Input label="Data" name="date" type="date" value={editedFreight.date} onChange={handleChange} />
               <Input label="Vencimento" name="due_date" type="date" value={editedFreight.due_date} onChange={handleChange} />
+              <Input label="Data Entrega" name="delivery_date" type="date" value={editedFreight.delivery_date || ''} onChange={handleChange} />
               <DatalistInput label="Cliente" name="client" value={editedFreight.client} onChange={handleChange} options={savedClients} id="edit-client-list" />
               <DatalistInput label="Origem" name="origin" value={editedFreight.origin} onChange={handleChange} options={savedOrigins} id="edit-origin-list"/>
               <DatalistInput label="Destino" name="destination" value={editedFreight.destination} onChange={handleChange} options={savedDestinations} id="edit-destination-list" />

@@ -1,10 +1,12 @@
 
 import React from 'react';
-import type { Trip } from '../types';
+import type { Trip, Maintenance } from '../types';
 import { TripDataSection } from './sections/TripDataSection';
 import { FreightsSection } from './sections/FreightsSection';
 import { ExpensesSection } from './sections/ExpensesSection';
 import { RefuelingSection } from './sections/RefuelingSection';
+import { MaintenanceSection } from './sections/MaintenanceSection';
+import { ObservationsSection } from './sections/ObservationsSection';
 
 interface TripFormProps {
   trip: Trip;
@@ -15,6 +17,9 @@ interface TripFormProps {
   savedOrigins: string[];
   savedDestinations: string[];
   savedLocations: string[];
+  savedMaintenanceTypes: string[];
+  lastMaintenances?: Maintenance[];
+  onShowMaintenanceHistory: () => void;
 }
 
 export const TripForm: React.FC<TripFormProps> = ({ 
@@ -25,7 +30,10 @@ export const TripForm: React.FC<TripFormProps> = ({
     savedExpenseCategories,
     savedOrigins,
     savedDestinations,
-    savedLocations
+    savedLocations,
+    savedMaintenanceTypes,
+    lastMaintenances,
+    onShowMaintenanceHistory
 }) => {
   return (
     <div className="space-y-8">
@@ -42,11 +50,19 @@ export const TripForm: React.FC<TripFormProps> = ({
         savedDestinations={savedDestinations}
       />
       <ExpensesSection trip={trip} setTrip={setTrip} savedCategories={savedExpenseCategories} />
+      <MaintenanceSection 
+        trip={trip} 
+        setTrip={setTrip} 
+        savedTypes={savedMaintenanceTypes}
+        lastMaintenances={lastMaintenances}
+        onShowHistory={onShowMaintenanceHistory}
+      />
       <RefuelingSection 
         trip={trip} 
         setTrip={setTrip} 
         savedLocations={savedLocations}
       />
+      <ObservationsSection trip={trip} setTrip={setTrip} />
     </div>
   );
 };

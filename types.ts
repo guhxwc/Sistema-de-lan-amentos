@@ -21,6 +21,16 @@ export interface Refueling {
   value: number | '';
 }
 
+export interface Maintenance {
+  id: string;
+  type: string; // ex: Troca de Óleo, Filtro de Ar
+  date: string;
+  current_km: number | '';
+  next_km: number | ''; // Próxima troca
+  value: number | '';
+  observations?: string;
+}
+
 export interface Trip {
   id: string;
   driver: string;
@@ -32,6 +42,7 @@ export interface Trip {
   freights: Freight[];
   expenses: Expense[];
   refuelings: Refueling[];
+  maintenances: Maintenance[];
   observations: string;
   created_at?: string;
 }
@@ -42,6 +53,9 @@ export interface SettlementItem {
   origin?: string;
   destination?: string;
   value: number | '';
+  // Novos campos para cálculo de comissão
+  freightValue?: number | '';
+  percentage?: number | '';
 }
 
 export interface Settlement {
@@ -61,6 +75,7 @@ export interface ReceivableFreight {
   id: string;
   date: string;
   due_date: string;
+  delivery_date?: string; // New field
   client: string;
   origin: string;
   destination: string;
@@ -95,4 +110,18 @@ export interface ThirdPartyFreight {
   advance_payment: number | '';
   status: 'Pendente' | 'Pago' | 'Parcial';
   created_at?: string;
+}
+
+export interface ProcessedCte {
+  id: string;
+  email_source: string;
+  received_at: string;
+  xml_content: string;
+  cte_number: string;
+  client_name: string;
+  origin: string;
+  destination: string;
+  total_value: number;
+  emission_date: string;
+  is_used: boolean;
 }

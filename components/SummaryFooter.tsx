@@ -6,6 +6,7 @@ interface SummaryFooterProps {
   calculations: {
     totalFreights: number;
     totalExpenses: number;
+    totalMaintenance: number;
     totalDieselCost: number;
     profit: number;
     distance: number;
@@ -44,38 +45,37 @@ export const SummaryFooter: React.FC<SummaryFooterProps> = ({ calculations }) =>
             colorClass="bg-slate-50 border-slate-100 text-slate-800" 
           />
           <SummaryItem 
-            label="Despesas" 
+            label="Despesas Gerais" 
             value={formatCurrency(calculations.totalExpenses)} 
             colorClass="bg-red-50 border-red-100 text-red-800" 
+          />
+           <SummaryItem 
+            label="Manutenção" 
+            value={formatCurrency(calculations.totalMaintenance)} 
+            colorClass="bg-amber-50 border-amber-100 text-amber-800" 
           />
           <SummaryItem 
             label="Diesel" 
             value={formatCurrency(calculations.totalDieselCost)} 
-            colorClass="bg-amber-50 border-amber-100 text-amber-800" 
+            colorClass="bg-orange-50 border-orange-100 text-orange-800" 
           />
           <SummaryItem 
             label="Lucro Líquido" 
             value={formatCurrency(calculations.profit)} 
             colorClass={`${calculations.profit >= 0 ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-red-50 border-red-100 text-red-700"} border-2`}
-            className="sm:row-span-2 md:row-span-2 sm:h-full !text-3xl"
+            className="sm:row-span-2 md:row-span-2 sm:h-full !text-3xl md:col-span-2"
           />
           
            <SummaryItem 
-            label="Distância Percorrida" 
+            label="Distância" 
             value={`${calculations.distance.toLocaleString('pt-BR')} km`} 
             colorClass="bg-white border-slate-100 text-slate-600" 
             className="!text-lg"
           />
           <SummaryItem 
-            label="Média de Consumo" 
+            label="Média" 
             value={`${calculations.averageKmL.toFixed(2)} km/L`} 
             colorClass="bg-white border-slate-100 text-slate-600"
-             className="!text-lg"
-          />
-           <SummaryItem 
-            label="Preço Médio Diesel" 
-            value={formatCurrency(calculations.averagePricePerLiter)} 
-            colorClass="bg-white border-slate-100 text-slate-600" 
              className="!text-lg"
           />
         </div>

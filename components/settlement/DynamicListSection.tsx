@@ -30,7 +30,7 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
   descriptionPlaceholder 
 }) => {
   const handleAddItem = () => {
-    setItems([...items, { id: crypto.randomUUID(), description: '', origin: '', destination: '', value: '' }]);
+    setItems([...items, { id: crypto.randomUUID(), description: '', origin: '', destination: '', value: '', freightValue: '', percentage: '' }]);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -38,7 +38,25 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
   };
 
   const handleChange = (id: string, field: keyof SettlementItem, value: string | number) => {
-    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setItems(items.map(item => {
+      if (item.id !== id) return item;
+      
+      const updatedItem = { ...item, [field]: value };
+
+      // Lógica de cálculo automático se for comissão
+      if (variant === 'commission') {
+        if (field === 'freightValue' || field === 'percentage') {
+           const fVal = field === 'freightValue' ? (value === '' ? 0 : Number(value)) : (Number(updatedItem.freightValue) || 0);
+           const pct = field === 'percentage' ? (value === '' ? 0 : Number(value)) : (Number(updatedItem.percentage) || 0);
+           
+           if (fVal > 0 && pct > 0) {
+             updatedItem.value = parseFloat((fVal * (pct / 100)).toFixed(2));
+           }
+        }
+      }
+
+      return updatedItem;
+    }));
   };
 
   return (
@@ -54,9 +72,9 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
               
               {variant === 'commission' && (
                 <>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
                     <DatalistInput
-                        label={`Origem #${index + 1}`}
+                        label={`Origem`}
                         value={item.origin || ''}
                         onChange={e => handleChange(item.id, 'origin', e.target.value)}
                         options={suggestions?.origins || []}
@@ -64,9 +82,9 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
                         placeholder="Origem"
                     />
                   </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
                      <DatalistInput
-                        label={`Destino #${index + 1}`}
+                        label={`Destino`}
                         value={item.destination || ''}
                         onChange={e => handleChange(item.id, 'destination', e.target.value)}
                         options={suggestions?.destinations || []}
@@ -74,14 +92,33 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
                         placeholder="Destino"
                     />
                   </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-2">
                     <DatalistInput
-                        label="Descrição / Nota"
+                        label="Nota / Desc."
                         value={item.description}
                         onChange={e => handleChange(item.id, 'description', e.target.value)}
                         options={suggestions?.descriptions || []}
                         id={`desc-${item.id}`}
                         placeholder={descriptionPlaceholder}
+                    />
+                  </div>
+                   {/* Novos Campos de Cálculo */}
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Val. Frete"
+                      type="number"
+                      placeholder="0.00"
+                      value={item.freightValue || ''}
+                      onChange={e => handleChange(item.id, 'freightValue', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <Input
+                      label="%"
+                      type="number"
+                      placeholder="%"
+                      value={item.percentage || ''}
+                      onChange={e => handleChange(item.id, 'percentage', e.target.value === '' ? '' : parseFloat(e.target.value))}
                     />
                   </div>
                 </>
@@ -102,9 +139,10 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
 
               <div className="md:col-span-2">
                 <Input
-                  label="Valor (R$)"
+                  label="Comissão (R$)"
                   type="number"
                   value={item.value}
+                  // Permite override manual, mas o cálculo automático acima sobrescreve se alterar frete/%
                   onChange={e => handleChange(item.id, 'value', e.target.value === '' ? '' : parseFloat(e.target.value))}
                 />
               </div>

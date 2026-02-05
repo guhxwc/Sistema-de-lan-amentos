@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { ThirdPartyFreight } from '../../types';
 import { supabase, getDistinctValues, saveAutocompleteValue, getSavedAutocompleteValues } from '../../lib/supabaseClient';
 import { ThirdPartySummaryCards } from '../thirdPartyFreights/ThirdPartySummaryCards';
@@ -13,8 +13,10 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { GoogleGenAI, Type } from '@google/genai';
 
-const calculateStatus = (paidFreight: number, advance: number, toll: number): 'Pago' | 'Parcial' | 'Pendente' => {
-    const balance = paidFreight - advance - toll;
+const calculateStatus = (paidFreight: number, advance: number): 'Pago' | 'Parcial' | 'Pendente' => {
+    // Lógica ajustada: O saldo é (Frete Combinado) - Adiantamento
+    // O Pedágio NÃO entra no saldo do motorista (pago via tag pela empresa), mas abate do lucro.
+    const balance = paidFreight - advance;
     if (balance <= 0.01 && paidFreight > 0) return 'Pago';
     if (advance > 0) return 'Parcial';
     return 'Pendente';
@@ -60,6 +62,9 @@ const getFromLocalStorage = (key: string): string[] => {
 export const ThirdPartyFreightsView: React.FC = () => {
   const [freights, setFreights] = useState<ThirdPartyFreight[]>([]);
   const [newFreight, setNewFreight] = useState(getInitialThirdPartyFreight());
+  
+  // Ref para rastrear o motorista anterior e evitar loops ou overwrites indesejados
+  const prevDriverRef = useRef<string>('');
   
   const [savedDrivers, setSavedDrivers] = useState<string[]>([]);
   const [savedLicensePlates, setSavedLicensePlates] = useState<string[]>([]);
@@ -151,6 +156,30 @@ export const ThirdPartyFreightsView: React.FC = () => {
     };
   }, [fetchFreights, fetchAutocompleteData]);
 
+  // Efeito para preencher automaticamente a placa quando o motorista muda
+  useEffect(() => {
+    const currentDriver = newFreight.driver;
+
+    // Se o motorista mudou em relação ao render anterior
+    if (prevDriverRef.current !== currentDriver) {
+        prevDriverRef.current = currentDriver;
+
+        if (currentDriver) {
+             const driverName = currentDriver.trim().toUpperCase();
+             // Encontra o registro mais recente para este motorista
+             // (freights já está ordenado por data desc no fetchFreights)
+             const lastEntry = freights.find(f => f.driver === driverName);
+             
+             if (lastEntry && lastEntry.license_plate) {
+                 setNewFreight(prev => ({
+                     ...prev,
+                     license_plate: lastEntry.license_plate
+                 }));
+             }
+        }
+    }
+  }, [newFreight.driver, freights]);
+
   const filteredFreights = useMemo(() => {
     if (filterStatus === 'todos') return freights;
     if (filterStatus === 'pagos') return freights.filter(f => f.status === 'Pago');
@@ -165,10 +194,12 @@ export const ThirdPartyFreightsView: React.FC = () => {
         const tollValue = Number(f.toll_value) || 0;
         const advance = Number(f.advance_payment) || 0;
 
-        // Profit = Revenue - Cost (Paid Freight is Gross)
-        acc.totalNetProfit += companyFreight - paidFreight;
+        // Profit = Revenue - Cost
+        // Cost = Paid to Driver + Toll (Company pays toll, so it reduces profit)
+        acc.totalNetProfit += companyFreight - (paidFreight + tollValue);
         
-        const balanceToPay = paidFreight - advance - tollValue;
+        // Balance = Paid - Advance (Toll is NOT added to driver payment)
+        const balanceToPay = paidFreight - advance;
         if (balanceToPay > 0) {
             acc.totalBalanceToPay += balanceToPay;
         }
@@ -278,7 +309,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
         license_plate: newFreight.license_plate.trim().toUpperCase(),
         origin: newFreight.origin.trim().toUpperCase(),
         destination: newFreight.destination.trim().toUpperCase(),
-        status: calculateStatus(paidFreight, advance, tollValue)
+        status: calculateStatus(paidFreight, advance)
     };
     const { error } = await supabase.from('third_party_freights').upsert(freightToAdd);
     if (error) {
@@ -289,6 +320,8 @@ export const ThirdPartyFreightsView: React.FC = () => {
 
         alert('Frete de terceiro adicionado com sucesso!');
         setNewFreight(getInitialThirdPartyFreight());
+        // Resetamos o ref para que se adicionar o mesmo motorista novamente, a lógica funcione se necessário
+        prevDriverRef.current = ''; 
         fetchFreights();
         fetchAutocompleteData();
     }
@@ -310,7 +343,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
         license_plate: updatedFreight.license_plate.trim().toUpperCase(),
         origin: updatedFreight.origin.trim().toUpperCase(),
         destination: updatedFreight.destination.trim().toUpperCase(),
-        status: calculateStatus(paidFreight, advance, tollValue)
+        status: calculateStatus(paidFreight, advance)
     };
     
     const { error } = await supabase.from('third_party_freights').update(freightWithCorrectStatus).eq('id', freightWithCorrectStatus.id);
@@ -344,8 +377,10 @@ export const ThirdPartyFreightsView: React.FC = () => {
     if (!freightToUpdate) return;
 
     const paidFreight = Number(freightToUpdate.paid_freight_value) || 0;
-    const tollValue = Number(freightToUpdate.toll_value) || 0;
-    const newAdvance = Math.max(0, paidFreight - tollValue);
+    
+    // Para zerar o saldo, o adiantamento (total pago) deve ser igual ao Frete Pago
+    // Pedágio não entra na conta do motorista
+    const newAdvance = paidFreight;
 
     const { error } = await supabase.from('third_party_freights').update({
       advance_payment: newAdvance, 
@@ -411,7 +446,9 @@ export const ThirdPartyFreightsView: React.FC = () => {
         const paid = Number(f.paid_freight_value) || 0;
         const toll = Number(f.toll_value) || 0;
         const advance = Number(f.advance_payment) || 0;
-        const balance = paid - toll - advance;
+        
+        // Balance = Paid - Advance (Toll not included in driver balance)
+        const balance = paid - advance;
 
         totalPaid += paid;
         totalToll += toll;

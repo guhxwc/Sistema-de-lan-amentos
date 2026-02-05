@@ -55,6 +55,10 @@ export const ReceivableRow: React.FC<ReceivableRowProps> = ({ freight, isSelecte
     onUpdate({ ...freight, paid_value: paidInput === '' ? 0 : (parseFloat(paidInput) || 0) });
   };
 
+  const handleDeliveryDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      onUpdate({ ...freight, delivery_date: e.target.value });
+  };
+
   let rowBgClass = 'bg-white hover:bg-slate-50';
   if (isSelected) {
       rowBgClass = 'bg-sky-50 hover:bg-sky-100/50';
@@ -104,6 +108,23 @@ export const ReceivableRow: React.FC<ReceivableRowProps> = ({ freight, isSelecte
         <td className={`px-4 py-2 whitespace-nowrap font-semibold ${isOverdue ? 'text-red-700' : ''}`}>{formatCurrency(pendingValue)}</td>
         <td className="px-4 py-2">
             <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>{status.text}</span>
+        </td>
+        <td className="px-4 py-2">
+             <div className="relative group">
+                 <input
+                    type="date"
+                    className={`
+                        px-3 py-2 
+                        border-2 ${freight.delivery_date ? 'border-emerald-400 bg-emerald-50 text-emerald-900 font-bold' : 'border-slate-300 bg-white text-slate-700 font-medium'}
+                        rounded-lg text-sm 
+                        focus:border-sky-500 focus:ring-4 focus:ring-sky-500/20 focus:bg-white
+                        outline-none w-40 transition-all duration-200 shadow-sm
+                    `}
+                    value={freight.delivery_date || ''}
+                    onChange={handleDeliveryDateChange}
+                    title="Data de Entrega"
+                 />
+             </div>
         </td>
         <td className="px-4 py-2">
             <div className="flex items-center gap-2">

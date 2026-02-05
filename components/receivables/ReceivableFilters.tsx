@@ -7,6 +7,8 @@ import { Select } from '../ui/Select';
 interface ReceivableFiltersProps {
   showOnlyPending: boolean;
   setShowOnlyPending: (value: boolean) => void;
+  showOnlyOverdue: boolean;
+  setShowOnlyOverdue: (value: boolean) => void;
   searchTerm: string;
   setSearchTerm: (value: string) => void;
   selectedMonth: string;
@@ -18,6 +20,8 @@ interface ReceivableFiltersProps {
 export const ReceivableFilters: React.FC<ReceivableFiltersProps> = ({ 
     showOnlyPending, 
     setShowOnlyPending, 
+    showOnlyOverdue,
+    setShowOnlyOverdue,
     searchTerm, 
     setSearchTerm,
     selectedMonth,
@@ -44,21 +48,36 @@ export const ReceivableFilters: React.FC<ReceivableFiltersProps> = ({
 
   return (
     <Card>
-      <CardContent className="flex flex-col md:flex-row items-center gap-4 p-4">
-        <div className="flex items-center min-w-fit">
-          <input
-            id="show-pending"
-            type="checkbox"
-            checked={showOnlyPending}
-            onChange={(e) => setShowOnlyPending(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-          />
-          <label htmlFor="show-pending" className="ml-2 block text-sm text-gray-900 cursor-pointer select-none whitespace-nowrap font-medium">
-            Apenas pendentes
-          </label>
+      <CardContent className="flex flex-col xl:flex-row items-center gap-4 p-4">
+        <div className="flex flex-wrap gap-4 min-w-fit">
+            <div className="flex items-center">
+            <input
+                id="show-pending"
+                type="checkbox"
+                checked={showOnlyPending}
+                onChange={(e) => setShowOnlyPending(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 cursor-pointer"
+            />
+            <label htmlFor="show-pending" className="ml-2 block text-sm text-gray-700 cursor-pointer select-none whitespace-nowrap font-medium">
+                Apenas pendentes
+            </label>
+            </div>
+
+            <div className="flex items-center">
+            <input
+                id="show-overdue"
+                type="checkbox"
+                checked={showOnlyOverdue}
+                onChange={(e) => setShowOnlyOverdue(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+            />
+            <label htmlFor="show-overdue" className="ml-2 block text-sm text-red-700 cursor-pointer select-none whitespace-nowrap font-bold">
+                Apenas vencidos
+            </label>
+            </div>
         </div>
         
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex gap-2 w-full md:w-auto flex-1 xl:flex-none">
              <div className="w-1/2 md:w-40">
                  <Select label="" id="filter-month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="!py-2">
                      <option value="Todos">Mês (Todos)</option>
@@ -73,7 +92,7 @@ export const ReceivableFilters: React.FC<ReceivableFiltersProps> = ({
              </div>
         </div>
 
-        <div className="flex-grow w-full">
+        <div className="flex-grow w-full xl:w-auto">
           <Input 
             label="" 
             id="search-freight" 

@@ -1,3 +1,4 @@
+
 import type { Trip } from './types';
 
 export const getInitialTrip = (): Trip => ({
@@ -11,6 +12,7 @@ export const getInitialTrip = (): Trip => ({
   freights: [],
   expenses: [],
   refuelings: [],
+  maintenances: [],
   observations: '',
 });
 
@@ -34,6 +36,9 @@ export const getExampleTrip = (): Trip => ({
   refuelings: [
     { id: crypto.randomUUID(), date: '2023-10-01', location: 'Posto XYZ, SP', odometer: 894000, liters: 150, value: 825 },
     { id: crypto.randomUUID(), date: '2023-10-03', location: 'Posto ABC, RJ', odometer: 895200, liters: 200, value: 1140 },
+  ],
+  maintenances: [
+    { id: crypto.randomUUID(), type: 'Troca de Óleo', date: '2023-10-02', current_km: 894500, next_km: 909500, value: 450, observations: 'Óleo 15w40' }
   ],
   observations: 'Viagem tranquila, sem ocorrências. Carga entregue no prazo.',
 });

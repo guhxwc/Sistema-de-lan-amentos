@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Trip } from '../../types';
+import type { Trip, Maintenance } from '../../types';
 import { Header } from '../Header';
 import { TripForm } from '../TripForm';
 import { Sidebar } from '../Sidebar';
@@ -9,6 +9,7 @@ import { getInitialTrip, getExampleTrip } from '../../constants';
 import { supabase, getDistinctValues } from '../../lib/supabaseClient';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { MaintenanceHistoryModal } from '../modals/MaintenanceHistoryModal';
 
 export function TripManagementView() {
   const [currentTrip, setCurrentTrip] = useState<Trip>(getInitialTrip());
@@ -17,6 +18,9 @@ export function TripManagementView() {
 
   const [savedDrivers, setSavedDrivers] = useState<string[]>([]);
   const [savedLicensePlates, setSavedLicensePlates] = useState<string[]>([]);
+  
+  // Estado para controlar modal de histórico
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   const fetchTrips = useCallback(async () => {
     const { data, error } = await supabase
@@ -27,7 +31,15 @@ export function TripManagementView() {
     if (error) {
       alert(`Erro ao buscar viagens: ${error.message}`);
     } else {
-      setSavedTrips(data || []);
+      // Null Safety: Garante que os campos JSONB sejam arrays
+      const safeData = (data || []).map((trip: Trip) => ({
+        ...trip,
+        freights: trip.freights || [],
+        expenses: trip.expenses || [],
+        refuelings: trip.refuelings || [],
+        maintenances: trip.maintenances || []
+      }));
+      setSavedTrips(safeData);
     }
   }, []);
 
@@ -40,7 +52,6 @@ export function TripManagementView() {
       setSavedDrivers(drivers);
       setSavedLicensePlates(plates);
     } catch(error: any) {
-        // Silent fail or minimal log
         console.error(`Erro ao carregar dados de autocompletar: ${error.message}`);
     }
   }, []);
@@ -74,11 +85,146 @@ export function TripManagementView() {
     }
   }, [currentTrip.refuelings]);
 
+  useEffect(() => {
+    const fetchLastPlate = async () => {
+      if (activeTripId) return;
+      if (!currentTrip.driver) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('trips')
+          .select('license_plate')
+          .eq('driver', currentTrip.driver.trim().toUpperCase())
+          .order('departure_date', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!error && data && data.license_plate) {
+           setCurrentTrip(prev => {
+             if (prev.license_plate !== data.license_plate) {
+                 return { ...prev, license_plate: data.license_plate };
+             }
+             return prev;
+           });
+        }
+      } catch (err) { }
+    };
+
+    const timeoutId = setTimeout(() => fetchLastPlate(), 500);
+    return () => clearTimeout(timeoutId);
+  }, [currentTrip.driver, activeTripId]);
+
+  useEffect(() => {
+    const fetchLastKm = async () => {
+      if (activeTripId) return;
+      if (!currentTrip.license_plate || !currentTrip.driver) return;
+
+      const plate = currentTrip.license_plate.trim().toUpperCase();
+      try {
+         const { data: kmData } = await supabase
+          .from('trips')
+          .select('final_km')
+          .eq('driver', currentTrip.driver.trim().toUpperCase())
+          .eq('license_plate', plate)
+          .order('departure_date', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (kmData && kmData.final_km) {
+          setCurrentTrip(prev => ({ ...prev, initial_km: kmData.final_km }));
+        }
+      } catch (err) {
+        console.error("Erro ao buscar km:", err);
+      }
+    };
+
+    const timeoutId = setTimeout(() => fetchLastKm(), 800);
+    return () => clearTimeout(timeoutId);
+  }, [currentTrip.driver, currentTrip.license_plate, activeTripId]);
+
+  // CÁLCULO DE HISTÓRICO DE MANUTENÇÃO COMPLETO PARA A PLACA ATUAL
+  const fullMaintenanceHistory = useMemo(() => {
+    if (!currentTrip.license_plate) return [];
+    
+    const plate = currentTrip.license_plate.trim().toUpperCase();
+    const history: (Maintenance & { tripDate?: string })[] = [];
+
+    // Varrer todas as viagens para encontrar manutenções dessa placa
+    savedTrips.forEach(t => {
+        if (t.license_plate === plate && t.maintenances && t.maintenances.length > 0) {
+            t.maintenances.forEach(m => {
+                history.push({
+                    ...m,
+                    tripDate: t.departure_date // Data da viagem como fallback se a manutenção não tiver data
+                });
+            });
+        }
+    });
+
+    // Ordenar por data (mais recente primeiro)
+    return history.sort((a, b) => {
+        const dateA = a.date || a.tripDate || '';
+        const dateB = b.date || b.tripDate || '';
+        return dateB.localeCompare(dateA);
+    });
+  }, [currentTrip.license_plate, savedTrips]);
+
+  // CÁLCULO DAS ÚLTIMAS OCORRÊNCIAS ÚNICAS (Para exibir no box de resumo)
+  const uniqueLastMaintenances = useMemo(() => {
+    const uniqueMap = new Map<string, Maintenance>();
+    
+    fullMaintenanceHistory.forEach(item => {
+        if (!item.type) return;
+        const normalizedType = item.type.trim().toUpperCase();
+        
+        // Como o array já está ordenado por data (desc), o primeiro que encontrarmos é o mais recente
+        if (!uniqueMap.has(normalizedType)) {
+            uniqueMap.set(normalizedType, item);
+        }
+    });
+
+    return Array.from(uniqueMap.values());
+  }, [fullMaintenanceHistory]);
+
+  const maintenanceAlerts = useMemo(() => {
+    if (!currentTrip.license_plate || !currentTrip.initial_km) return [];
+    
+    const currentKm = Number(currentTrip.initial_km);
+    const alerts: string[] = [];
+    
+    // Normalizar tipos sendo feitos agora
+    const typesBeingFixed = new Set(
+        currentTrip.maintenances.map(m => m.type ? m.type.trim().toLowerCase() : '')
+    );
+
+    // Usar a lista de ÚNICAS manutenções recentes para verificar vencimentos
+    uniqueLastMaintenances.forEach(maint => {
+        if (!maint.type || !maint.next_km) return;
+        const normalizedType = maint.type.trim().toLowerCase();
+
+        // Se já está sendo consertado agora, ignora alerta
+        if (typesBeingFixed.has(normalizedType)) return;
+
+        const nextKm = Number(maint.next_km);
+        const remaining = nextKm - currentKm;
+
+        if (remaining <= 0) {
+            alerts.push(`URGENTE: ${maint.type} vencida há ${Math.abs(remaining)} km (Venceu em ${nextKm} km)`);
+        } else if (remaining <= 1000) {
+            alerts.push(`ATENÇÃO: ${maint.type} vence em ${remaining} km (Próxima troca: ${nextKm} km)`);
+        }
+    });
+    
+    return alerts;
+  }, [currentTrip.license_plate, currentTrip.initial_km, currentTrip.maintenances, uniqueLastMaintenances]);
+
   const calculations = useMemo(() => {
     const totalFreights = currentTrip.freights.reduce((acc, f) => acc + (Number(f.value) || 0), 0);
     const totalDieselCost = currentTrip.refuelings.reduce((acc, r) => acc + (Number(r.value) || 0), 0);
     const totalExpenses = currentTrip.expenses.reduce((acc, e) => acc + (Number(e.value) || 0), 0);
-    const profit = totalFreights - (totalDieselCost + totalExpenses);
+    const totalMaintenance = (currentTrip.maintenances || []).reduce((acc, m) => acc + (Number(m.value) || 0), 0);
+    
+    const profit = totalFreights - (totalDieselCost + totalExpenses + totalMaintenance);
     
     const totalLiters = currentTrip.refuelings.reduce((acc, r) => acc + (Number(r.liters) || 0), 0);
     
@@ -89,42 +235,32 @@ export function TripManagementView() {
     const averageKmL = totalLiters > 0 && distance > 0 ? distance / totalLiters : 0;
     const averagePricePerLiter = totalLiters > 0 ? totalDieselCost / totalLiters : 0;
 
-    return { totalFreights, totalDieselCost, totalExpenses, profit, distance, averageKmL, averagePricePerLiter };
+    return { totalFreights, totalDieselCost, totalExpenses, totalMaintenance, profit, distance, averageKmL, averagePricePerLiter };
   }, [currentTrip]);
 
-  // Extract unique values for autocomplete from saved trips
-  const { savedExpenseCategories, savedOrigins, savedDestinations, savedLocations } = useMemo(() => {
+  const { savedExpenseCategories, savedOrigins, savedDestinations, savedLocations, savedMaintenanceTypes } = useMemo(() => {
     const categories = new Set<string>();
     const origins = new Set<string>();
     const destinations = new Set<string>();
     const locations = new Set<string>();
+    const maintenanceTypes = new Set<string>();
 
     savedTrips.forEach(trip => {
-      if (Array.isArray(trip.expenses)) {
-        trip.expenses.forEach(expense => {
-          if (expense.description && expense.description.trim() !== '') {
-            categories.add(expense.description.trim());
-          }
-        });
-      }
-      if (Array.isArray(trip.freights)) {
-          trip.freights.forEach(freight => {
-              if (freight.origin && freight.origin.trim() !== '') origins.add(freight.origin.trim());
-              if (freight.destination && freight.destination.trim() !== '') destinations.add(freight.destination.trim());
-          });
-      }
-      if (Array.isArray(trip.refuelings)) {
-          trip.refuelings.forEach(refueling => {
-              if (refueling.location && refueling.location.trim() !== '') locations.add(refueling.location.trim());
-          });
-      }
+      trip.expenses?.forEach(e => { if (e.description) categories.add(e.description.trim()); });
+      trip.freights?.forEach(f => {
+          if (f.origin) origins.add(f.origin.trim());
+          if (f.destination) destinations.add(f.destination.trim());
+      });
+      trip.refuelings?.forEach(r => { if (r.location) locations.add(r.location.trim()); });
+      trip.maintenances?.forEach(m => { if (m.type) maintenanceTypes.add(m.type.trim()); });
     });
     
     return {
         savedExpenseCategories: Array.from(categories).sort(),
         savedOrigins: Array.from(origins).sort(),
         savedDestinations: Array.from(destinations).sort(),
-        savedLocations: Array.from(locations).sort()
+        savedLocations: Array.from(locations).sort(),
+        savedMaintenanceTypes: Array.from(maintenanceTypes).sort()
     };
   }, [savedTrips]);
 
@@ -134,16 +270,14 @@ export function TripManagementView() {
   }, []);
 
   const handleSaveTrip = useCallback(async () => {
-    // Prepare object for saving
     const tripToSave = { 
         ...currentTrip,
         driver: currentTrip.driver ? currentTrip.driver.trim().toUpperCase() : '',
         license_plate: currentTrip.license_plate ? currentTrip.license_plate.trim().toUpperCase() : '',
-        departure_date: currentTrip.departure_date ? currentTrip.departure_date : null,
-        arrival_date: currentTrip.arrival_date ? currentTrip.arrival_date : null,
+        departure_date: currentTrip.departure_date || null,
+        arrival_date: currentTrip.arrival_date || null,
         initial_km: currentTrip.initial_km === '' ? null : currentTrip.initial_km,
         final_km: currentTrip.final_km === '' ? null : currentTrip.final_km,
-        // Ensure nested arrays clean up strings
         freights: currentTrip.freights.map(f => ({
             ...f,
             origin: f.origin ? f.origin.trim() : '',
@@ -156,6 +290,10 @@ export function TripManagementView() {
         expenses: currentTrip.expenses.map(e => ({
             ...e,
             description: e.description ? e.description.trim() : ''
+        })),
+        maintenances: currentTrip.maintenances.map(m => ({
+            ...m,
+            type: m.type ? m.type.trim() : ''
         }))
     };
     
@@ -165,10 +303,8 @@ export function TripManagementView() {
       alert(`Erro ao salvar viagem: ${error.message}`);
     } else {
       alert('Viagem salva com sucesso!');
-      // Clean fields and reset ID to ensure new entry if user types again
       setCurrentTrip(getInitialTrip());
       setActiveTripId(null);
-      
       await fetchTrips();
       await fetchAutocompleteData();
     }
@@ -177,7 +313,13 @@ export function TripManagementView() {
   const handleLoadTrip = useCallback((tripId: string) => {
     const tripToLoad = savedTrips.find(t => t.id === tripId);
     if (tripToLoad) {
-      setCurrentTrip(tripToLoad);
+      setCurrentTrip({
+          ...tripToLoad,
+          freights: tripToLoad.freights || [],
+          expenses: tripToLoad.expenses || [],
+          refuelings: tripToLoad.refuelings || [],
+          maintenances: tripToLoad.maintenances || []
+      });
       setActiveTripId(tripId);
     }
   }, [savedTrips]);
@@ -211,17 +353,10 @@ export function TripManagementView() {
     }
 
     const doc = new jsPDF();
-    
     const colorSlate900 = [15, 23, 42]; 
     const colorSlate500 = [100, 116, 139]; 
-    const colorGray200 = [226, 232, 240];
-    const colorBlue600 = [2, 132, 199]; 
-    const colorSlate800 = [30, 41, 59]; 
-
     const marginLeft = 15;
     const marginRight = 195;
-    const contentWidth = 180;
-    
     let currentY = 20;
 
     doc.setFont('helvetica', 'bold');
@@ -235,96 +370,69 @@ export function TripManagementView() {
     const today = new Date().toLocaleDateString('pt-BR');
     doc.text(`Gerado em: ${today}`, marginRight, currentY, { align: 'right' });
     
-    currentY += 5;
-    doc.setDrawColor(colorGray200[0], colorGray200[1], colorGray200[2]);
-    doc.setLineWidth(0.5);
-    doc.line(marginLeft, currentY, marginRight, currentY);
     currentY += 10;
-
-    const labelStyle = (x: number, y: number, text: string) => {
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colorSlate500[0], colorSlate500[1], colorSlate500[2]);
-        doc.text(text.toUpperCase(), x, y);
-    };
     
-    const valueStyle = (x: number, y: number, text: string) => {
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(colorSlate900[0], colorSlate900[1], colorSlate900[2]);
-        doc.text(text, x, y);
-    };
-
-    labelStyle(marginLeft, currentY, 'Motorista');
-    labelStyle(80, currentY, 'Placa');
-    labelStyle(140, currentY, 'Período');
-    currentY += 5;
-    valueStyle(marginLeft, currentY, currentTrip.driver || '-');
-    valueStyle(80, currentY, currentTrip.license_plate || '-');
+    // Header Info
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Motorista: ${currentTrip.driver}`, marginLeft, currentY);
+    doc.text(`Placa: ${currentTrip.license_plate}`, 80, currentY);
     const dateRange = `${currentTrip.departure_date ? new Date(currentTrip.departure_date).toLocaleDateString('pt-BR') : '-'} a ${currentTrip.arrival_date ? new Date(currentTrip.arrival_date).toLocaleDateString('pt-BR') : '-'}`;
-    valueStyle(140, currentY, dateRange);
-    currentY += 12;
-
-    labelStyle(marginLeft, currentY, 'KM Inicial');
-    labelStyle(80, currentY, 'KM Final');
-    labelStyle(140, currentY, 'Distância Total');
-    currentY += 5;
-    valueStyle(marginLeft, currentY, String(currentTrip.initial_km || '-'));
-    valueStyle(80, currentY, String(currentTrip.final_km || '-'));
-    valueStyle(140, currentY, `${calculations.distance.toLocaleString('pt-BR')} km`);
+    doc.text(`Período: ${dateRange}`, 140, currentY);
+    
     currentY += 15;
 
     const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const tableOptions: any = {
         theme: 'striped',
-        styles: { fontSize: 9, cellPadding: 3, textColor: colorSlate900 },
-        headStyles: { 
-            fillColor: colorSlate800, 
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            lineWidth: 0, 
-        },
-        alternateRowStyles: { fillColor: [241, 245, 249] },
-        columnStyles: { last: { halign: 'right' } },
+        styles: { fontSize: 9, cellPadding: 2 },
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255] },
         margin: { left: marginLeft, right: 15 } 
     };
 
     if (currentTrip.freights.length > 0) {
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colorBlue600[0], colorBlue600[1], colorBlue600[2]);
-        doc.text('Receitas (Fretes)', marginLeft, currentY);
+        doc.text('Fretes', marginLeft, currentY);
         currentY += 2;
         autoTable(doc, {
             startY: currentY + 2,
             head: [['Origem', 'Destino', 'Valor']],
             body: currentTrip.freights.map(f => [f.origin, f.destination, formatBRL(Number(f.value) || 0)]),
-            ...tableOptions,
-            columnStyles: { 2: { halign: 'right', fontStyle: 'bold' } },
+            ...tableOptions
+        });
+        currentY = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    if (currentTrip.maintenances && currentTrip.maintenances.length > 0) {
+        doc.text('Manutenção', marginLeft, currentY);
+        currentY += 2;
+        autoTable(doc, {
+            startY: currentY + 2,
+            head: [['Serviço', 'Data', 'KM Atual', 'Prox. KM', 'Valor']],
+            body: currentTrip.maintenances.map(m => [
+                m.type, 
+                m.date ? new Date(m.date).toLocaleDateString('pt-BR') : '-',
+                m.current_km,
+                m.next_km,
+                formatBRL(Number(m.value) || 0)
+            ]),
+            ...tableOptions
         });
         currentY = (doc as any).lastAutoTable.finalY + 10;
     }
 
     if (currentTrip.expenses.length > 0) {
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colorSlate900[0], colorSlate900[1], colorSlate900[2]);
-        doc.text('Despesas Operacionais', marginLeft, currentY);
+        doc.text('Despesas', marginLeft, currentY);
         currentY += 2;
         autoTable(doc, {
             startY: currentY + 2,
             head: [['Descrição', 'Valor']],
             body: currentTrip.expenses.map(e => [e.description, formatBRL(Number(e.value) || 0)]),
-            ...tableOptions,
-            columnStyles: { 1: { halign: 'right' } },
+            ...tableOptions
         });
         currentY = (doc as any).lastAutoTable.finalY + 10;
     }
 
     if (currentTrip.refuelings.length > 0) {
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(colorSlate900[0], colorSlate900[1], colorSlate900[2]);
         doc.text('Abastecimentos', marginLeft, currentY);
         currentY += 2;
         autoTable(doc, {
@@ -336,39 +444,18 @@ export function TripManagementView() {
                 Number(r.liters).toFixed(2) + ' L',
                 formatBRL(Number(r.value) || 0)
             ]),
-            ...tableOptions,
-            columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+            ...tableOptions
         });
         currentY = (doc as any).lastAutoTable.finalY + 10;
     }
 
-    if (currentY + 50 > doc.internal.pageSize.height) {
-        doc.addPage();
-        currentY = 20;
-    }
-
-    doc.setDrawColor(colorGray200[0], colorGray200[1], colorGray200[2]);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(marginLeft, currentY, contentWidth, 45, 2, 2);
-
-    const boxY = currentY + 5;
-    
-    doc.setFontSize(9);
+    // Totais
+    currentY += 5;
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(colorSlate500[0], colorSlate500[1], colorSlate500[2]);
-    doc.text('Indicadores de Desempenho', marginLeft + 5, boxY + 5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(colorSlate900[0], colorSlate900[1], colorSlate900[2]);
-    doc.text(`Consumo Médio: ${calculations.averageKmL.toFixed(2)} km/L`, marginLeft + 5, boxY + 15);
-    doc.text(`Preço Médio Diesel: ${formatBRL(calculations.averagePricePerLiter)} /L`, marginLeft + 5, boxY + 22);
-    
-    // Profit
-    doc.text('Resultado Financeiro:', marginLeft + 90, boxY + 15);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatBRL(calculations.profit), marginLeft + 90, boxY + 23);
+    doc.text(`Lucro Líquido: ${formatBRL(calculations.profit)}`, marginLeft, currentY);
 
-    doc.save(`Relatorio_Viagem_${currentTrip.driver.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Relatorio_${currentTrip.driver}.pdf`);
   }, [currentTrip, calculations]);
 
   return (
@@ -383,6 +470,24 @@ export function TripManagementView() {
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-10">
           <div className="mx-auto grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-6">
               <div className="space-y-6 min-w-0">
+                  {maintenanceAlerts.length > 0 && (
+                     <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg animate-in slide-in-from-top-2">
+                        <div className="flex items-center gap-2 mb-2">
+                            <svg className="h-5 w-5 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.03-1.742 3.03H4.42c-1.532 0-2.492-1.696-1.742-3.03l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <h3 className="font-bold text-amber-800">Lembretes de Manutenção</h3>
+                        </div>
+                        <ul className="list-disc list-inside space-y-1">
+                            {maintenanceAlerts.map((alert, idx) => (
+                                <li key={idx} className={`text-sm font-medium ${alert.includes('URGENTE') ? 'text-red-700' : 'text-amber-700'}`}>
+                                    {alert}
+                                </li>
+                            ))}
+                        </ul>
+                     </div>
+                  )}
+
                   <TripForm 
                     trip={currentTrip} 
                     setTrip={setCurrentTrip} 
@@ -392,6 +497,9 @@ export function TripManagementView() {
                     savedOrigins={savedOrigins}
                     savedDestinations={savedDestinations}
                     savedLocations={savedLocations}
+                    savedMaintenanceTypes={savedMaintenanceTypes}
+                    lastMaintenances={uniqueLastMaintenances}
+                    onShowMaintenanceHistory={() => setIsHistoryModalOpen(true)}
                   />
                   <SummaryFooter calculations={calculations} />
               </div>
@@ -405,6 +513,14 @@ export function TripManagementView() {
               </div>
           </div>
       </div>
+      
+      {isHistoryModalOpen && (
+          <MaintenanceHistoryModal 
+            licensePlate={currentTrip.license_plate}
+            history={fullMaintenanceHistory}
+            onClose={() => setIsHistoryModalOpen(false)}
+          />
+      )}
     </div>
   );
 }

@@ -53,6 +53,7 @@ export const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
                 <th scope="col" className="px-4 py-3 min-w-[200px]">Pago</th>
                 <th scope="col" className="px-4 py-3">Pendente</th>
                 <th scope="col" className="px-4 py-3">Status</th>
+                <th scope="col" className="px-4 py-3 min-w-[150px]">Entrega</th>
                 <th scope="col" className="px-4 py-3 min-w-[150px]">Ações</th>
               </tr>
             </thead>

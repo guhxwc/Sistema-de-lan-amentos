@@ -8,6 +8,7 @@ import { EditFiscalNoteModal } from '../fiscalNotes/EditFiscalNoteModal';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { Select } from '../ui/Select';
+import { Input } from '../ui/Input';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { GoogleGenAI, Type } from '@google/genai';
@@ -39,6 +40,7 @@ export const FiscalNotesView: React.FC = () => {
   // Filters
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [filterClientDelivered, setFilterClientDelivered] = useState('Todos');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchNotes = useCallback(async () => {
     const { data, error } = await supabase
@@ -128,9 +130,11 @@ export const FiscalNotesView: React.FC = () => {
         if (filterClientDelivered === 'Sim') matchesClientDelivered = note.client_delivered === true;
         if (filterClientDelivered === 'Não') matchesClientDelivered = !note.client_delivered;
 
-        return matchesStatus && matchesClientDelivered;
+        const matchesSearch = searchTerm === '' || note.nf_number.toLowerCase().includes(searchTerm.toLowerCase());
+
+        return matchesStatus && matchesClientDelivered && matchesSearch;
     });
-  }, [notes, filterStatus, filterClientDelivered]);
+  }, [notes, filterStatus, filterClientDelivered, searchTerm]);
 
   const extractDataFromXml = async (xmlContent: string) => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -627,20 +631,28 @@ export const FiscalNotesView: React.FC = () => {
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-[98%] mx-auto space-y-6">
           <Card>
-            <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
-                 <div className="w-full sm:w-48">
+            <CardContent className="p-4 flex flex-col md:flex-row gap-4">
+                 <div className="w-full md:w-48">
                      <Select label="Filtrar por Status" id="filter-status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                          <option value="Todos">Todos</option>
                          <option value="Pendente">Pendentes</option>
                          <option value="Entregue">Entregues</option>
                      </Select>
                  </div>
-                 <div className="w-full sm:w-48">
+                 <div className="w-full md:w-48">
                      <Select label="Entregue ao Cliente" id="filter-client" value={filterClientDelivered} onChange={e => setFilterClientDelivered(e.target.value)}>
                          <option value="Todos">Todos</option>
                          <option value="Sim">Sim</option>
                          <option value="Não">Não</option>
                      </Select>
+                 </div>
+                 <div className="w-full md:flex-1">
+                    <Input 
+                        label="Pesquisar Nº NF" 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                        placeholder="Digite o número da nota..." 
+                    />
                  </div>
             </CardContent>
           </Card>

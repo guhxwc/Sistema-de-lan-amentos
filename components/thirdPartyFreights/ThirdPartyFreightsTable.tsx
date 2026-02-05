@@ -72,12 +72,13 @@ export const ThirdPartyFreightsTable: React.FC<ThirdPartyFreightsTableProps> = (
                 const companyVal = Number(freight.company_freight_value) || 0;
                 const tollVal = Number(freight.toll_value) || 0;
 
-                // Balance = Paid (Gross) - Advance - Toll
-                const balanceToPay = paidVal - advanceVal - tollVal;
+                // Saldo = Frete Pago - Adiantamento (Pedágio não entra no saldo)
+                const balanceToPay = paidVal - advanceVal;
                 
-                // Profit = Company Revenue - Paid to Driver (Gross)
-                // Toll is considered part of the gross paid value (deducted from driver's balance), so cost is paidVal
-                const netProfit = companyVal - paidVal;
+                // Lucro = Receita Empresa - (Pago ao Motorista + Pedágio)
+                // O pedágio continua descontando do lucro da empresa
+                const netProfit = companyVal - (paidVal + tollVal);
+
                 const isSelected = selectedFreights.has(freight.id);
                 
                 let rowBaseClass = 'bg-white hover:bg-slate-50';

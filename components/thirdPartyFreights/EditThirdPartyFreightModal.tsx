@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { ThirdPartyFreight } from '../../types';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -18,9 +18,31 @@ interface EditThirdPartyFreightModalProps {
 
 export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProps> = ({ freight, onSave, onClose, savedDrivers, savedLicensePlates, savedOrigins, savedDestinations }) => {
   const [editedFreight, setEditedFreight] = useState(freight);
+  const [advancePercentage, setAdvancePercentage] = useState('');
+
+  // Auto-calculate advance payment when percentage or paid freight changes
+  useEffect(() => {
+    if (advancePercentage && !isNaN(parseFloat(advancePercentage))) {
+        const paid = Number(editedFreight.paid_freight_value) || 0;
+        const percentage = parseFloat(advancePercentage);
+        
+        // Logic: Paid Freight * Percentage (Toll excluded)
+        const advance = paid * (percentage / 100);
+        
+        setEditedFreight(prev => ({
+            ...prev,
+            advance_payment: parseFloat(advance.toFixed(2))
+        }));
+    }
+  }, [advancePercentage, editedFreight.paid_freight_value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    
+    if (name === 'advance_payment') {
+        setAdvancePercentage('');
+    }
+
     setEditedFreight(prev => ({
       ...prev,
       [name]: type === 'number' ? (value === '' ? '' : parseFloat(value)) : value,
@@ -35,14 +57,14 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
   const calculatedStatus = useMemo(() => {
     const advance = Number(editedFreight.advance_payment) || 0;
     const paid = Number(editedFreight.paid_freight_value) || 0;
-    const toll = Number(editedFreight.toll_value) || 0;
     
-    const balance = paid - advance - toll;
+    // Saldo = Pago - Adiantamento (Pedágio não conta)
+    const balance = paid - advance;
 
     if (balance <= 0.01 && paid > 0) return 'Pago';
     if (advance > 0) return 'Parcial';
     return 'Pendente';
-  }, [editedFreight.advance_payment, editedFreight.paid_freight_value, editedFreight.toll_value]);
+  }, [editedFreight.advance_payment, editedFreight.paid_freight_value]);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -64,7 +86,23 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
                 <Input label="Frete Empresa (R$)" name="company_freight_value" type="number" step="0.01" value={editedFreight.company_freight_value} onChange={handleChange} />
                 <Input label="Frete Pago (R$)" name="paid_freight_value" type="number" step="0.01" value={editedFreight.paid_freight_value} onChange={handleChange} />
                 <Input label="Pedágio (R$)" name="toll_value" type="number" step="0.01" value={editedFreight.toll_value} onChange={handleChange} />
-                <Input label="Adiantamento (R$)" name="advance_payment" type="number" step="0.01" value={editedFreight.advance_payment} onChange={handleChange} />
+                
+                <div className="flex gap-2">
+                     <div className="w-1/3">
+                        <Input 
+                            label="% Adiant." 
+                            name="advance_percentage" 
+                            type="number" 
+                            value={advancePercentage} 
+                            onChange={(e) => setAdvancePercentage(e.target.value)} 
+                            placeholder="%"
+                        />
+                     </div>
+                     <div className="w-2/3">
+                        <Input label="Adiantamento (R$)" name="advance_payment" type="number" step="0.01" value={editedFreight.advance_payment} onChange={handleChange} />
+                     </div>
+                </div>
+
                 <div>
                     <label className="block text-sm font-medium text-slate-600 mb-1">Status (Automático)</label>
                     <div className="w-full h-[42px] px-3 py-2 bg-slate-100 border border-slate-300 rounded-md shadow-sm sm:text-sm flex items-center">

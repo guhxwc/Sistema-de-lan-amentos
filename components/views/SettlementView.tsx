@@ -43,7 +43,14 @@ export const SettlementView: React.FC = () => {
     if (error) {
       alert(`Erro ao buscar acertos: ${error.message}`);
     } else {
-      setHistory(data || []);
+      // Null Safety: Ensure jsonb columns are arrays
+      const safeData = (data || []).map((item: Settlement) => ({
+        ...item,
+        commissions: item.commissions || [],
+        additions: item.additions || [],
+        discounts: item.discounts || []
+      }));
+      setHistory(safeData);
     }
   }, []);
 
@@ -158,6 +165,8 @@ export const SettlementView: React.FC = () => {
         commissions: currentSettlement.commissions.map(c => ({ 
             ...c, 
             value: Number(c.value) || 0,
+            freightValue: c.freightValue ? Number(c.freightValue) : null, // Salvar valor do frete
+            percentage: c.percentage ? Number(c.percentage) : null,       // Salvar porcentagem
             origin: c.origin ? c.origin.trim().toUpperCase() : '',
             destination: c.destination ? c.destination.trim().toUpperCase() : '',
             description: c.description ? c.description.trim() : ''
@@ -182,6 +191,7 @@ export const SettlementView: React.FC = () => {
         alert('Acerto salvo com sucesso!');
         fetchSettlements();
         fetchDrivers();
+        handleClearFields(); // Limpa os campos automaticamente após salvar
     }
   };
 
@@ -190,7 +200,9 @@ export const SettlementView: React.FC = () => {
     if (itemToLoad) {
       setCurrentSettlement({
           ...itemToLoad,
-          additions: itemToLoad.additions || [] // Handle legacy records
+          commissions: itemToLoad.commissions || [],
+          additions: itemToLoad.additions || [],
+          discounts: itemToLoad.discounts || []
       });
     }
   };
@@ -269,8 +281,12 @@ export const SettlementView: React.FC = () => {
         currentY += 5;
 
         const commissionData = currentSettlement.commissions.map(c => {
-            const rota = (c.origin || c.destination) ? `${c.origin || ''} x ${c.destination || ''}` : '-';
-            return [rota, c.description, formatBRL(Number(c.value) || 0)];
+            let detail = (c.origin || c.destination) ? `${c.origin || ''} x ${c.destination || ''}` : '-';
+            // Se tiver dados de cálculo, adiciona ao detalhe
+            if (c.percentage && c.freightValue) {
+                detail += `\n(Frete: ${formatBRL(Number(c.freightValue))} | ${c.percentage}%)`;
+            }
+            return [detail, c.description, formatBRL(Number(c.value) || 0)];
         });
 
         autoTable(doc, {
@@ -362,7 +378,14 @@ export const SettlementView: React.FC = () => {
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    
+    // COR DO SALDO FINAL NO PDF
+    if (totals.finalBalance < 0) {
+        doc.setTextColor(220, 38, 38); // Red-600
+    } else {
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    }
+    
     doc.text('SALDO FINAL:', 20, finalY + 42);
     doc.text(formatBRL(totals.finalBalance), 190, finalY + 42, { align: 'right' });
 
@@ -587,7 +610,7 @@ export const SettlementView: React.FC = () => {
                             <h3 className="font-semibold text-xs uppercase tracking-wider">Total Descontos</h3>
                             <p className="text-xl font-bold">{formatCurrency(totals.totalDiscounts)}</p>
                         </div>
-                        <div className="p-4 bg-sky-100 text-sky-800 rounded-lg text-center border-2 border-sky-200">
+                        <div className={`p-4 rounded-lg text-center border-2 ${totals.finalBalance < 0 ? 'bg-red-100 text-red-800 border-red-200' : 'bg-sky-100 text-sky-800 border-sky-200'}`}>
                             <h3 className="font-semibold text-xs uppercase tracking-wider">Saldo Final</h3>
                             <p className="text-xl font-bold">{formatCurrency(totals.finalBalance)}</p>
                         </div>

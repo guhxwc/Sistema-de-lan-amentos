@@ -1,5 +1,5 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import type { ThirdPartyFreight } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -30,9 +30,32 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
     isProcessingXml
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [advancePercentage, setAdvancePercentage] = useState('');
+
+  // Auto-calculate advance payment when percentage or paid freight changes
+  useEffect(() => {
+    if (advancePercentage && !isNaN(parseFloat(advancePercentage))) {
+        const paid = Number(newFreight.paid_freight_value) || 0;
+        const percentage = parseFloat(advancePercentage);
+        
+        // Logic: Paid Freight * Percentage (Toll excluded)
+        const advance = paid * (percentage / 100);
+        
+        setNewFreight(prev => ({
+            ...prev,
+            advance_payment: parseFloat(advance.toFixed(2))
+        }));
+    }
+  }, [advancePercentage, newFreight.paid_freight_value, setNewFreight]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
+    
+    // If user manually edits the advance payment, clear the percentage to stop auto-calc
+    if (name === 'advance_payment') {
+        setAdvancePercentage('');
+    }
+
     setNewFreight(prev => ({
       ...prev,
       [name]: type === 'number' ? (value === '' ? '' : parseFloat(value)) : value,
@@ -63,7 +86,22 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
           <Input label="Frete Empresa (R$)" name="company_freight_value" type="number" step="0.01" value={newFreight.company_freight_value} onChange={handleChange} />
           <Input label="Frete Pago (R$)" name="paid_freight_value" type="number" step="0.01" value={newFreight.paid_freight_value} onChange={handleChange} />
           <Input label="Pedágio (R$)" name="toll_value" type="number" step="0.01" value={newFreight.toll_value} onChange={handleChange} />
-          <Input label="Adiantamento (R$)" name="advance_payment" type="number" step="0.01" value={newFreight.advance_payment} onChange={handleChange} />
+          
+          <div className="flex gap-2">
+             <div className="w-1/3">
+                <Input 
+                    label="% Adiant." 
+                    name="advance_percentage" 
+                    type="number" 
+                    value={advancePercentage} 
+                    onChange={(e) => setAdvancePercentage(e.target.value)} 
+                    placeholder="%"
+                />
+             </div>
+             <div className="w-2/3">
+                <Input label="Adiantamento (R$)" name="advance_payment" type="number" step="0.01" value={newFreight.advance_payment} onChange={handleChange} />
+             </div>
+          </div>
         </div>
         <div className="flex flex-wrap justify-end gap-3 mt-4">
             <Button

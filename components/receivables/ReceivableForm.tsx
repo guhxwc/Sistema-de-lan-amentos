@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import type { ReceivableFreight } from '../../types';
 import { Card, CardContent } from '../ui/Card';
@@ -42,9 +43,10 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({ newFreight, setN
   return (
     <Card>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
           <div className="lg:col-span-1"><Input label="Data" name="date" type="date" value={newFreight.date} onChange={handleChange} /></div>
           <div className="lg:col-span-1"><Input label="Vencimento" name="due_date" type="date" value={newFreight.due_date} onChange={handleChange} /></div>
+          <div className="lg:col-span-1"><Input label="Data Entrega" name="delivery_date" type="date" value={newFreight.delivery_date || ''} onChange={handleChange} /></div>
           <div className="md:col-span-2 lg:col-span-2"><DatalistInput label="Cliente" name="client" value={newFreight.client} onChange={handleChange} options={savedClients} id="client-list" /></div>
           <div className="md:col-span-2 lg:col-span-1"><DatalistInput label="Origem" name="origin" value={newFreight.origin} onChange={handleChange} options={savedOrigins} id="origin-list"/></div>
           <div className="md:col-span-2 lg:col-span-1"><DatalistInput label="Destino" name="destination" value={newFreight.destination} onChange={handleChange} options={savedDestinations} id="destination-list" /></div>
@@ -52,7 +54,7 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({ newFreight, setN
           <div className="md:col-span-1"><Input label="Valor Total (R$)" name="total_value" type="number" value={newFreight.total_value} onChange={handleChange} /></div>
           <div className="md:col-span-1"><Input label="Pago (R$)" name="paid_value" type="number" value={newFreight.paid_value} onChange={handleChange} /></div>
           <div className="md:col-span-1"><Input label="Cor da Linha" name="row_color" type="color" value={newFreight.row_color} onChange={handleChange} className="p-1 h-10"/></div>
-          <div className="md:col-span-2 grid grid-cols-2 gap-2">
+          <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 gap-2">
             <Button
               type="button"
               onClick={handleXmlButtonClick}
