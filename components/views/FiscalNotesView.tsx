@@ -11,7 +11,6 @@ import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { GoogleGenAI, Type } from '@google/genai';
 import JSZip from 'jszip';
 
 const getInitialNote = (): FiscalNote => ({
@@ -43,26 +42,29 @@ export const FiscalNotesView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchNotes = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('fiscal_notes')
-      .select('*')
-      .order('shipping_date', { ascending: false })
-      .order('created_at', { ascending: false }); // Ordenação secundária para estabilidade
-    if (error) {
-      alert(`Erro ao buscar notas: ${error.message}`);
-    } else {
-      setNotes(data || []);
-      // Manter seleção válida apenas para itens que ainda existem
-      setSelectedNotes(prev => {
-        const newSet = new Set<string>();
-        if (data) {
-            const currentIds = new Set(data.map(n => n.id));
-            prev.forEach(id => {
-                if (currentIds.has(id)) newSet.add(id);
-            });
-        }
-        return newSet;
-      });
+    try {
+      const { data, error } = await supabase
+        .from('fiscal_notes')
+        .select('*')
+        .order('shipping_date', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn(`Erro ao buscar notas: ${error.message}`);
+      } else {
+        setNotes(data || []);
+        setSelectedNotes(prev => {
+          const newSet = new Set<string>();
+          if (data) {
+              const currentIds = new Set(data.map(n => n.id));
+              prev.forEach(id => {
+                  if (currentIds.has(id)) newSet.add(id);
+              });
+          }
+          return newSet;
+        });
+      }
+    } catch (error: any) {
+      console.warn(`Erro de rede ao buscar notas: ${error.message}`);
     }
   }, []);
 
@@ -137,7 +139,20 @@ export const FiscalNotesView: React.FC = () => {
   }, [notes, filterStatus, filterClientDelivered, searchTerm]);
 
   const extractDataFromXml = async (xmlContent: string) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
+    const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
+
+    console.log('Debug API Key (FiscalNotes):', {
+      original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
+      cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
+      length: apiKey.length
+    });
+    
+    if (!apiKey) {
+      throw new Error("Configuração da IA ausente. Verifique se a chave da API está configurada.");
+    }
+
+    // const ai = new GoogleGenAI({ apiKey }); // Removido para usar fetch direto
     
     // Atualizado para extrair APENAS o número da NF (nNF) e ignorar a série e remover zeros a esquerda
     // Atualizado para extrair Nome do Destinatário/Recebedor ao invés da cidade
@@ -174,25 +189,41 @@ export const FiscalNotesView: React.FC = () => {
       XML:
       ${xmlContent}`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              company: { type: Type.STRING, description: "Nome da empresa remetente" },
-              nf_number: { type: Type.STRING, description: "Número da NF (somente o número, sem zeros a esquerda)" },
-              delivery_location: { type: Type.STRING, description: "Nome da empresa recebedora ou destinatária" },
-              shipping_date: { type: Type.STRING, description: "Data no formato AAAA-MM-DD" },
-            },
-            required: ['company', 'nf_number', 'delivery_location', 'shipping_date']
-          },
+      // Usando fetch direto para garantir o envio correto da chave
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                company: { type: "STRING", description: "Nome da empresa remetente" },
+                nf_number: { type: "STRING", description: "Número da NF (somente o número, sem zeros a esquerda)" },
+                delivery_location: { type: "STRING", description: "Nome da empresa recebedora ou destinatária" },
+                shipping_date: { type: "STRING", description: "Data no formato AAAA-MM-DD" },
+              },
+              required: ['company', 'nf_number', 'delivery_location', 'shipping_date']
+            }
+          }
+        })
       });
 
-      return JSON.parse(response.text);
+      if (!response.ok) {
+         const errorData = await response.json().catch(() => ({}));
+         throw new Error(errorData.error?.message || `Erro na API: ${response.status}`);
+      }
+
+      const responseJson = await response.json();
+      const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!responseText) throw new Error("IA não retornou dados.");
+
+      return JSON.parse(responseText);
   };
 
   const handleXmlUpload = useCallback(async (file: File) => {
@@ -217,9 +248,15 @@ export const FiscalNotesView: React.FC = () => {
     } catch (error: any) {
       console.error("Erro ao processar XML com IA:", error);
       let errorMessage = "Ocorreu um erro ao processar o arquivo XML.";
-      if (error.message?.includes('429')) {
+      
+      if (error.message?.includes('Configuração da IA ausente')) {
+        errorMessage = "A chave da API do Gemini não foi encontrada. Por favor, configure-a no ambiente.";
+      } else if (error.message?.includes('429')) {
          errorMessage = "Limite de uso da IA excedido. Aguarde alguns instantes e tente novamente.";
+      } else if (error.message?.includes('403')) {
+         errorMessage = "Erro de permissão (403). A chave da API pode estar incorreta ou inválida no ambiente de produção.";
       }
+      
       alert(errorMessage);
     } finally {
       setIsProcessingXml(false);

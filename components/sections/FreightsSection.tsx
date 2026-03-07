@@ -28,13 +28,13 @@ export const FreightsSection: React.FC<FreightsSectionProps> = ({ trip, setTrip,
     }));
   };
 
-  const handleChange = (id: string, field: keyof Omit<Freight, 'id'>, value: string) => {
-    const isNumericField = field === 'value';
+  const handleChange = (id: string, field: keyof Omit<Freight, 'id'>, value: string | number) => {
+    // Nota: Com o novo Input currency, 'value' já virá como número se for campo de moeda
     setTrip(prev => ({
       ...prev,
       freights: prev.freights.map(f =>
         f.id === id
-          ? { ...f, [field]: isNumericField ? (value === '' ? '' : parseFloat(value)) : value }
+          ? { ...f, [field]: value } // Value já é tratado no Input
           : f
       )
     }));
@@ -74,7 +74,13 @@ export const FreightsSection: React.FC<FreightsSectionProps> = ({ trip, setTrip,
               />
             </div>
             <div className="md:col-span-1">
-              <Input label="Valor (R$)" type="number" value={freight.value} onChange={e => handleChange(freight.id, 'value', e.target.value)} autoComplete="off" />
+              <Input 
+                label="Valor (R$)" 
+                currency 
+                value={freight.value} 
+                onChange={e => handleChange(freight.id, 'value', e.target.value)} 
+                autoComplete="off" 
+              />
             </div>
             <div className="md:col-span-1">
               <Button onClick={() => handleRemoveFreight(freight.id)} variant="danger" size="sm" className="w-full">

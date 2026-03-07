@@ -50,8 +50,8 @@ export const EditFreightModal: React.FC<EditFreightModalProps> = ({ freight, onS
               <DatalistInput label="Origem" name="origin" value={editedFreight.origin} onChange={handleChange} options={savedOrigins} id="edit-origin-list"/>
               <DatalistInput label="Destino" name="destination" value={editedFreight.destination} onChange={handleChange} options={savedDestinations} id="edit-destination-list" />
               <Input label="CT-e" name="cte" value={editedFreight.cte} onChange={handleChange} />
-              <Input label="Valor Total (R$)" name="total_value" type="number" step="0.01" value={editedFreight.total_value} onChange={handleChange} />
-              <Input label="Pago (R$)" name="paid_value" type="number" step="0.01" value={editedFreight.paid_value} onChange={handleChange} />
+              <Input label="Valor Total (R$)" name="total_value" currency value={editedFreight.total_value} onChange={handleChange} />
+              <Input label="Pago (R$)" name="paid_value" currency value={editedFreight.paid_value} onChange={handleChange} />
               <Input label="Cor da Linha" name="row_color" type="color" value={editedFreight.row_color} onChange={handleChange} className="p-1 h-10"/>
             </div>
           </CardContent>

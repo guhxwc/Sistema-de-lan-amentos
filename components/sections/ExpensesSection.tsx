@@ -19,7 +19,7 @@ export const ExpensesSection: React.FC<ExpensesSectionProps> = ({ trip, setTrip,
   const handleAddExpense = () => {
     setTrip(prev => ({
       ...prev,
-      expenses: [...prev.expenses, { id: crypto.randomUUID(), description: filterCategory || '', value: '' }]
+      expenses: [{ id: crypto.randomUUID(), description: filterCategory || '', value: '' }, ...prev.expenses]
     }));
   };
 
@@ -30,13 +30,12 @@ export const ExpensesSection: React.FC<ExpensesSectionProps> = ({ trip, setTrip,
     }));
   };
 
-  const handleChange = (id: string, field: keyof Omit<Expense, 'id'>, value: string) => {
-    const isNumericField = field === 'value';
+  const handleChange = (id: string, field: keyof Omit<Expense, 'id'>, value: string | number) => {
     setTrip(prev => ({
       ...prev,
       expenses: prev.expenses.map(e =>
         e.id === id
-          ? { ...e, [field]: isNumericField ? (value === '' ? '' : parseFloat(value)) : value }
+          ? { ...e, [field]: value }
           : e
       )
     }));
@@ -148,7 +147,12 @@ export const ExpensesSection: React.FC<ExpensesSectionProps> = ({ trip, setTrip,
               />
             </div>
             <div className="md:col-span-1">
-              <Input label="Valor (R$)" type="number" value={expense.value} onChange={e => handleChange(expense.id, 'value', e.target.value)} />
+              <Input 
+                label="Valor (R$)" 
+                currency 
+                value={expense.value} 
+                onChange={e => handleChange(expense.id, 'value', e.target.value)} 
+              />
             </div>
             <div className="md:col-span-1">
               <Button onClick={() => handleRemoveExpense(expense.id)} variant="danger" size="sm" className="w-full">

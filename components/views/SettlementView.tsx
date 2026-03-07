@@ -127,8 +127,12 @@ export const SettlementView: React.FC = () => {
     const totalCommissions = currentSettlement.commissions.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
     const totalAdditions = currentSettlement.additions.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
     const totalDiscounts = currentSettlement.discounts.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-    const finalBalance = totalCommissions + totalAdditions - totalDiscounts;
-    return { totalCommissions, totalAdditions, totalDiscounts, finalBalance };
+    
+    // Soma de todos os créditos (Comissões + Outros)
+    const totalCredits = totalCommissions + totalAdditions;
+    
+    const finalBalance = totalCredits - totalDiscounts;
+    return { totalCommissions, totalAdditions, totalDiscounts, totalCredits, finalBalance };
   }, [currentSettlement]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -358,7 +362,7 @@ export const SettlementView: React.FC = () => {
     
     doc.setDrawColor(200, 200, 200);
     doc.setFillColor(250, 250, 250);
-    doc.roundedRect(14, finalY, 182, 50, 2, 2, 'FD');
+    doc.roundedRect(14, finalY, 182, 58, 2, 2, 'FD'); // Aumentado altura para caber o subtotal
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
@@ -370,11 +374,19 @@ export const SettlementView: React.FC = () => {
     doc.text('Total Outros Créditos:', 20, finalY + 18);
     doc.text(formatBRL(totals.totalAdditions), 190, finalY + 18, { align: 'right' });
 
-    doc.text('Total Débitos:', 20, finalY + 26);
-    doc.text(formatBRL(totals.totalDiscounts), 190, finalY + 26, { align: 'right' });
+    // Subtotal de Créditos
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(2, 132, 199); // Blue
+    doc.text('Total Créditos (Bruto):', 20, finalY + 26);
+    doc.text(formatBRL(totals.totalCredits), 190, finalY + 26, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60); // Reset color
+
+    doc.text('Total Débitos:', 20, finalY + 34);
+    doc.text(formatBRL(totals.totalDiscounts), 190, finalY + 34, { align: 'right' });
 
     doc.setDrawColor(220, 220, 220);
-    doc.line(20, finalY + 32, 190, finalY + 32);
+    doc.line(20, finalY + 40, 190, finalY + 40);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
@@ -386,12 +398,12 @@ export const SettlementView: React.FC = () => {
         doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     }
     
-    doc.text('SALDO FINAL:', 20, finalY + 42);
-    doc.text(formatBRL(totals.finalBalance), 190, finalY + 42, { align: 'right' });
+    doc.text('SALDO FINAL:', 20, finalY + 50);
+    doc.text(formatBRL(totals.finalBalance), 190, finalY + 50, { align: 'right' });
 
     // Observations if any
     if (currentSettlement.observations || currentSettlement.fines_balance) {
-        let obsY = finalY + 60;
+        let obsY = finalY + 68;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(60, 60, 60);
@@ -449,9 +461,112 @@ export const SettlementView: React.FC = () => {
     });
   }, [history, filterDriver, filterMonth, filterYear]);
 
+  const [selectedSettlementIds, setSelectedSettlementIds] = useState<string[]>([]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedSettlementIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (ids: string[]) => {
+    setSelectedSettlementIds(ids);
+  };
+
   const filteredTotal = useMemo(() => {
     return filteredHistory.reduce((acc, curr) => acc + (Number(curr.final_balance) || 0), 0);
   }, [filteredHistory]);
+
+  const handleGenerateSelectedReportPDF = () => {
+    if (selectedSettlementIds.length === 0) {
+        alert('Selecione pelo menos um acerto para gerar o relatório.');
+        return;
+    }
+
+    const selectedItems = history.filter(item => selectedSettlementIds.includes(item.id));
+    
+    // Sort by date descending
+    selectedItems.sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return b.date.localeCompare(a.date);
+    });
+
+    const doc = new jsPDF();
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Relatório de Acertos Selecionados', 14, 20);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 30);
+    doc.text(`Total de registros: ${selectedItems.length}`, 14, 35);
+
+    // Calculate totals for selected items
+    const totals = selectedItems.reduce((acc, item) => {
+        const comms = (item.commissions || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+        const adds = (item.additions || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+        const discs = (item.discounts || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+        
+        return {
+            commissions: acc.commissions + comms,
+            additions: acc.additions + adds,
+            totalCredits: acc.totalCredits + (comms + adds),
+            discounts: acc.discounts + discs,
+            finalBalance: acc.finalBalance + (Number(item.final_balance) || 0)
+        };
+    }, { commissions: 0, additions: 0, totalCredits: 0, discounts: 0, finalBalance: 0 });
+
+    const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const tableData = selectedItems.map(item => {
+        const comms = (item.commissions || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+        const adds = (item.additions || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+        const totalCred = comms + adds;
+        const discs = (item.discounts || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+
+        return [
+            item.date ? item.date.split('-').reverse().join('/') : '-',
+            item.driver,
+            formatBRL(comms),
+            formatBRL(adds),
+            formatBRL(totalCred),
+            formatBRL(discs),
+            formatBRL(Number(item.final_balance))
+        ];
+    });
+
+    autoTable(doc, {
+        startY: 45,
+        head: [['Data', 'Motorista', 'Comissões', 'Outros', 'Total Créd.', 'Descontos', 'Saldo Final']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: { fillColor: [2, 132, 199], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        bodyStyles: { fontSize: 7, halign: 'center' },
+        columnStyles: {
+             0: { cellWidth: 20, halign: 'center' }, // Data
+             1: { cellWidth: 'auto', halign: 'left' }, // Motorista
+             2: { cellWidth: 25, halign: 'right' }, // Comissões
+             3: { cellWidth: 25, halign: 'right' }, // Outros
+             4: { cellWidth: 25, halign: 'right', fontStyle: 'bold', textColor: [2, 132, 199] }, // Total Créditos
+             5: { cellWidth: 25, halign: 'right', textColor: [180, 60, 60] }, // Descontos
+             6: { cellWidth: 25, halign: 'right', fontStyle: 'bold' } // Saldo
+        },
+        foot: [[
+            'TOTAIS', 
+            '', 
+            formatBRL(totals.commissions),
+            formatBRL(totals.additions),
+            formatBRL(totals.totalCredits),
+            formatBRL(totals.discounts),
+            formatBRL(totals.finalBalance)
+        ]],
+        footStyles: { fillColor: [240, 240, 240], textColor: 50, fontStyle: 'bold', halign: 'right' }
+    });
+
+    doc.save('relatorio_acertos_selecionados.pdf');
+  };
 
   const handleGenerateReportPDF = () => {
     const doc = new jsPDF();
@@ -478,16 +593,18 @@ export const SettlementView: React.FC = () => {
         return {
             commissions: acc.commissions + comms,
             additions: acc.additions + adds,
+            totalCredits: acc.totalCredits + (comms + adds),
             discounts: acc.discounts + discs,
             finalBalance: acc.finalBalance + (Number(item.final_balance) || 0)
         };
-    }, { commissions: 0, additions: 0, discounts: 0, finalBalance: 0 });
+    }, { commissions: 0, additions: 0, totalCredits: 0, discounts: 0, finalBalance: 0 });
 
     const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const tableData = filteredHistory.map(item => {
         const comms = (item.commissions || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
         const adds = (item.additions || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
+        const totalCred = comms + adds;
         const discs = (item.discounts || []).reduce((sum, c) => sum + (Number(c.value) || 0), 0);
 
         return [
@@ -495,6 +612,7 @@ export const SettlementView: React.FC = () => {
             item.driver,
             formatBRL(comms),
             formatBRL(adds),
+            formatBRL(totalCred),
             formatBRL(discs),
             formatBRL(Number(item.final_balance))
         ];
@@ -502,24 +620,26 @@ export const SettlementView: React.FC = () => {
 
     autoTable(doc, {
         startY: 45,
-        head: [['Data', 'Motorista', 'Comissões', 'Descargas', 'Descontos', 'Saldo Final']],
+        head: [['Data', 'Motorista', 'Comissões', 'Outros', 'Total Créd.', 'Descontos', 'Saldo Final']],
         body: tableData,
         theme: 'striped',
-        headStyles: { fillColor: [2, 132, 199], textColor: 255, fontStyle: 'bold', fontSize: 9, halign: 'center' },
-        bodyStyles: { fontSize: 8, halign: 'center' },
+        headStyles: { fillColor: [2, 132, 199], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
+        bodyStyles: { fontSize: 7, halign: 'center' },
         columnStyles: {
-             0: { cellWidth: 22, halign: 'center' }, // Data
+             0: { cellWidth: 20, halign: 'center' }, // Data
              1: { cellWidth: 'auto', halign: 'left' }, // Motorista
              2: { cellWidth: 25, halign: 'right' }, // Comissões
              3: { cellWidth: 25, halign: 'right' }, // Outros
-             4: { cellWidth: 25, halign: 'right' }, // Descontos
-             5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' } // Saldo
+             4: { cellWidth: 25, halign: 'right', fontStyle: 'bold', textColor: [2, 132, 199] }, // Total Créditos
+             5: { cellWidth: 25, halign: 'right', textColor: [180, 60, 60] }, // Descontos
+             6: { cellWidth: 25, halign: 'right', fontStyle: 'bold' } // Saldo
         },
         foot: [[
             'TOTAIS', 
             '', 
             formatBRL(totals.commissions),
             formatBRL(totals.additions),
+            formatBRL(totals.totalCredits),
             formatBRL(totals.discounts),
             formatBRL(totals.finalBalance)
         ]],
@@ -597,7 +717,7 @@ export const SettlementView: React.FC = () => {
                 <CardHeader>Resumo e Ações</CardHeader>
                 <CardContent className="space-y-6">
                     <Textarea label="Saldo de multas (somente formalização - não entra no cálculo)" name="fines_balance" value={currentSettlement.fines_balance} onChange={handleInputChange} rows={2} />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div className="p-4 bg-slate-100 text-slate-800 rounded-lg text-center">
                             <h3 className="font-semibold text-xs uppercase tracking-wider">Total Comissões</h3>
                             <p className="text-xl font-bold">{formatCurrency(totals.totalCommissions)}</p>
@@ -605,6 +725,10 @@ export const SettlementView: React.FC = () => {
                         <div className="p-4 bg-emerald-50 text-emerald-800 rounded-lg text-center">
                             <h3 className="font-semibold text-xs uppercase tracking-wider">Total Outros</h3>
                             <p className="text-xl font-bold">{formatCurrency(totals.totalAdditions)}</p>
+                        </div>
+                         <div className="p-4 bg-blue-50 text-blue-800 border border-blue-100 rounded-lg text-center">
+                            <h3 className="font-semibold text-xs uppercase tracking-wider">Total Créditos (Bruto)</h3>
+                            <p className="text-xl font-bold">{formatCurrency(totals.totalCredits)}</p>
                         </div>
                         <div className="p-4 bg-red-50 text-red-800 rounded-lg text-center">
                             <h3 className="font-semibold text-xs uppercase tracking-wider">Total Descontos</h3>
@@ -650,6 +774,12 @@ export const SettlementView: React.FC = () => {
                             </svg>
                             Imprimir Relatório
                         </Button>
+                        <Button onClick={handleGenerateSelectedReportPDF} variant="secondary" className="flex items-center gap-2 justify-center" disabled={selectedSettlementIds.length === 0}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M5 4v3h4l2-3 2 3h4V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm-3 8v5a2 2 0 002 2h14a2 2 0 002-2v-5a2 2 0 00-2-2H4a2 2 0 00-2 2zm10-3h5l-2.5-3L12 9z" clipRule="evenodd" />
+                            </svg>
+                            Imprimir Selecionados ({selectedSettlementIds.length})
+                        </Button>
                     </div>
                     {filteredTotal !== 0 && (
                         <div className="mt-4 p-4 bg-sky-50 border border-sky-100 rounded-lg flex justify-between items-center">
@@ -662,10 +792,13 @@ export const SettlementView: React.FC = () => {
 
             <SettlementHistory 
                 history={filteredHistory} 
-                onView={handleLoadFromHistory}
+                onView={handleLoadFromHistory} 
                 onEdit={handleLoadFromHistory}
                 onDelete={handleDeleteFromHistory}
                 onClear={handleClearHistory}
+                selectedIds={selectedSettlementIds}
+                onToggleSelect={handleToggleSelect}
+                onSelectAll={handleSelectAll}
             />
         </div>
       </main>

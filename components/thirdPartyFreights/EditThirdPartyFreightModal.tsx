@@ -83,9 +83,9 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
                 <Input label="Data" name="date" type="date" value={editedFreight.date} onChange={handleChange} />
                 <DatalistInput label="Origem" name="origin" value={editedFreight.origin} onChange={handleChange} options={savedOrigins} id="edit-tp-origin-list"/>
                 <DatalistInput label="Destino" name="destination" value={editedFreight.destination} onChange={handleChange} options={savedDestinations} id="edit-tp-destination-list" />
-                <Input label="Frete Empresa (R$)" name="company_freight_value" type="number" step="0.01" value={editedFreight.company_freight_value} onChange={handleChange} />
-                <Input label="Frete Pago (R$)" name="paid_freight_value" type="number" step="0.01" value={editedFreight.paid_freight_value} onChange={handleChange} />
-                <Input label="Pedágio (R$)" name="toll_value" type="number" step="0.01" value={editedFreight.toll_value} onChange={handleChange} />
+                <Input label="Frete Empresa (R$)" name="company_freight_value" currency value={editedFreight.company_freight_value} onChange={handleChange} />
+                <Input label="Frete Pago (R$)" name="paid_freight_value" currency value={editedFreight.paid_freight_value} onChange={handleChange} />
+                <Input label="Pedágio (R$)" name="toll_value" currency value={editedFreight.toll_value} onChange={handleChange} />
                 
                 <div className="flex gap-2">
                      <div className="w-1/3">
@@ -99,7 +99,7 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
                         />
                      </div>
                      <div className="w-2/3">
-                        <Input label="Adiantamento (R$)" name="advance_payment" type="number" step="0.01" value={editedFreight.advance_payment} onChange={handleChange} />
+                        <Input label="Adiantamento (R$)" name="advance_payment" currency value={editedFreight.advance_payment} onChange={handleChange} />
                      </div>
                 </div>
 

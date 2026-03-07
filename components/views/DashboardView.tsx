@@ -33,6 +33,9 @@ create table if not exists inbox_ctes (
   created_at timestamp with time zone default now()
 );
 
+-- Garante que a coluna is_used exista caso a tabela já tenha sido criada sem ela
+alter table inbox_ctes add column if not exists is_used boolean default false;
+
 -- Tabela para VIAGENS (Trips)
 create table if not exists trips (
   id uuid primary key default uuid_generate_v4(),

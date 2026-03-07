@@ -106,7 +106,7 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
                   <div className="md:col-span-2">
                     <Input
                       label="Val. Frete"
-                      type="number"
+                      currency
                       placeholder="0.00"
                       value={item.freightValue || ''}
                       onChange={e => handleChange(item.id, 'freightValue', e.target.value === '' ? '' : parseFloat(e.target.value))}
@@ -139,8 +139,8 @@ export const DynamicListSection: React.FC<DynamicListSectionProps> = ({
 
               <div className="md:col-span-2">
                 <Input
-                  label="Comissão (R$)"
-                  type="number"
+                  label={variant === 'commission' ? "Comissão (R$)" : "Valor (R$)"}
+                  currency
                   value={item.value}
                   // Permite override manual, mas o cálculo automático acima sobrescreve se alterar frete/%
                   onChange={e => handleChange(item.id, 'value', e.target.value === '' ? '' : parseFloat(e.target.value))}

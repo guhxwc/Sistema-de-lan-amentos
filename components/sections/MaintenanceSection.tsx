@@ -40,14 +40,19 @@ export const MaintenanceSection: React.FC<MaintenanceSectionProps> = ({ trip, se
     }));
   };
 
-  const handleChange = (id: string, field: keyof Omit<Maintenance, 'id'>, value: string) => {
+  const handleChange = (id: string, field: keyof Omit<Maintenance, 'id'>, value: string | number) => {
     setTrip(prev => ({
       ...prev,
       maintenances: prev.maintenances.map(m => {
         if (m.id !== id) return m;
 
+        let newValue: string | number = value;
         const isNumericField = ['current_km', 'next_km', 'value'].includes(field);
-        const newValue = isNumericField ? (value === '' ? '' : parseFloat(value)) : value;
+        
+        // Conversão segura se o input não for currency (que já manda number)
+        if (isNumericField && typeof value === 'string' && field !== 'value') {
+             newValue = value === '' ? '' : parseFloat(value);
+        }
         
         const updatedItem = { ...m, [field]: newValue };
 
@@ -153,7 +158,13 @@ export const MaintenanceSection: React.FC<MaintenanceSectionProps> = ({ trip, se
                 <Input label="Próxima Troca (Auto)" type="number" value={m.next_km} onChange={e => handleChange(m.id, 'next_km', e.target.value)} placeholder="0" />
             </div>
             <div className="md:col-span-2">
-                <Input label="Custo (R$)" type="number" value={m.value} onChange={e => handleChange(m.id, 'value', e.target.value)} placeholder="0.00" />
+                <Input 
+                    label="Custo (R$)" 
+                    currency 
+                    value={m.value} 
+                    onChange={e => handleChange(m.id, 'value', e.target.value)} 
+                    placeholder="0.00" 
+                />
             </div>
             <div className="md:col-span-1">
               <Button onClick={() => handleRemoveMaintenance(m.id)} variant="danger" size="sm" className="w-full" title="Remover">

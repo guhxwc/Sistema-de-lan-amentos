@@ -40,7 +40,8 @@ const getStatus = (totalValue: number, paidValue: number, isOverdue: boolean): {
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export const ReceivableRow: React.FC<ReceivableRowProps> = ({ freight, isSelected, onToggleSelect, onDelete, onEdit, onUpdate }) => {
-  const [paidInput, setPaidInput] = useState(String(freight.paid_value === '' ? '' : freight.paid_value));
+  // Use numeric state, but input component handles format
+  const [paidInput, setPaidInput] = useState<string | number>(freight.paid_value === '' ? '' : freight.paid_value);
 
   const totalVal = Number(freight.total_value) || 0;
   const paidVal = Number(freight.paid_value) || 0;
@@ -52,7 +53,7 @@ export const ReceivableRow: React.FC<ReceivableRowProps> = ({ freight, isSelecte
   const status = useMemo(() => getStatus(totalVal, paidVal, isOverdue), [totalVal, paidVal, isOverdue]);
 
   const handleSavePaidValue = () => {
-    onUpdate({ ...freight, paid_value: paidInput === '' ? 0 : (parseFloat(paidInput) || 0) });
+    onUpdate({ ...freight, paid_value: paidInput === '' ? 0 : (typeof paidInput === 'string' ? parseFloat(paidInput) : paidInput) || 0 });
   };
 
   const handleDeliveryDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,10 +97,9 @@ export const ReceivableRow: React.FC<ReceivableRowProps> = ({ freight, isSelecte
                 <Input 
                     label="" 
                     id={`paid-${freight.id}`} 
-                    type="number" 
-                    step="0.01"
+                    currency
                     value={paidInput} 
-                    onChange={e => setPaidInput(e.target.value)}
+                    onChange={e => setPaidInput(Number(e.target.value))}
                     className={`!py-1.5 bg-white/80 ${isOverdue ? 'border-red-200 focus:border-red-400 focus:ring-red-200' : ''}`}
                 />
                 <Button onClick={handleSavePaidValue} size="sm" variant={isOverdue ? 'danger' : 'primary'}>Salvar</Button>

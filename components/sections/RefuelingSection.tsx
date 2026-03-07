@@ -27,17 +27,37 @@ export const RefuelingSection: React.FC<RefuelingSectionProps> = ({ trip, setTri
     }));
   };
 
-  const handleChange = (id: string, field: keyof Omit<Refueling, 'id'>, value: string) => {
-    const isNumericField = ['odometer', 'liters', 'value'].includes(field);
+  const handleChange = (id: string, field: keyof Omit<Refueling, 'id'>, value: string | number) => {
+    // Nota: Com o Input currency, value já vem como número. 
+    // Para outros campos (litros, hodometro) que usam type=number no input, value vem como string do onChange e precisa de conversão se necessário.
+    // Mas no código original, o Input chama handleChange que checa 'isNumericField' e converte com parseFloat.
+    
     setTrip(prev => ({
       ...prev,
-      refuelings: prev.refuelings.map(r =>
-        r.id === id
-          ? { ...r, [field]: isNumericField ? (value === '' ? '' : parseFloat(value)) : value }
-          : r
-      )
+      refuelings: prev.refuelings.map(r => {
+        if (r.id !== id) return r;
+        
+        let newValue: string | number = value;
+        const isNumericField = ['odometer', 'liters', 'value'].includes(field);
+        
+        // Se for campo numérico, mas não for o 'value' (que agora é currency e já vem número), garantimos a conversão
+        if (isNumericField && typeof value === 'string' && field !== 'value') {
+             newValue = value === '' ? '' : parseFloat(value);
+        }
+
+        return { ...r, [field]: newValue };
+      })
     }));
   };
+  
+  const sortedRefuelings = [...trip.refuelings].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return -1;
+    if (!b.date) return 1;
+    const dateDiff = b.date.localeCompare(a.date);
+    if (dateDiff !== 0) return dateDiff;
+    return (Number(b.odometer) || 0) - (Number(a.odometer) || 0);
+  });
   
   return (
     <Card>
@@ -48,15 +68,16 @@ export const RefuelingSection: React.FC<RefuelingSectionProps> = ({ trip, setTri
         Abastecimentos
       </CardHeader>
       <CardContent className="space-y-4">
-        {trip.refuelings.map((refueling, index) => {
+        {sortedRefuelings.map((refueling, index) => {
            const liters = Number(refueling.liters) || 0;
            const value = Number(refueling.value) || 0;
            const pricePerLiter = liters > 0 ? (value / liters).toFixed(2) : '0.00';
 
            const currentOdometer = Number(refueling.odometer) || 0;
-           const previousOdometer = index === 0
+           // In descending order, the previous refueling (chronologically) is the next one in the list (index + 1)
+           const previousOdometer = index === sortedRefuelings.length - 1
              ? (Number(trip.initial_km) || 0)
-             : (Number(trip.refuelings[index - 1].odometer) || 0);
+             : (Number(sortedRefuelings[index + 1].odometer) || 0);
 
            const segmentDistance = currentOdometer > previousOdometer ? currentOdometer - previousOdometer : 0;
            const segmentAverage = liters > 0 && segmentDistance > 0 ? (segmentDistance / liters).toFixed(2) : '0.00';
@@ -90,7 +111,13 @@ export const RefuelingSection: React.FC<RefuelingSectionProps> = ({ trip, setTri
               </div>
               {/* Aumentado para col-span-2 */}
               <div className="md:col-span-2">
-                  <Input label="Valor" type="number" value={refueling.value} onChange={e => handleChange(refueling.id, 'value', e.target.value)} autoComplete="off" />
+                  <Input 
+                    label="Valor (R$)" 
+                    currency 
+                    value={refueling.value} 
+                    onChange={e => handleChange(refueling.id, 'value', e.target.value)} 
+                    autoComplete="off" 
+                  />
                   <div className="flex items-center justify-between mt-1 px-1">
                        <span className="text-[10px] uppercase font-bold text-slate-400">Média Seg.</span>
                        <span className="text-xs font-medium text-slate-600">{segmentAverage} km/L</span>

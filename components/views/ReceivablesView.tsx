@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
 import type { ReceivableFreight, ProcessedCte } from '../../types';
 import { supabase, getDistinctValues } from '../../lib/supabaseClient';
 import { SummaryCards } from '../receivables/SummaryCards';
@@ -49,26 +48,30 @@ export const ReceivablesView: React.FC = () => {
   const [loadingInbox, setLoadingInbox] = useState(false);
 
   const fetchFreights = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('receivable_freights')
-      .select('*')
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('receivable_freights')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      alert(`Erro ao buscar fretes: ${error.message}`);
-    } else {
-      setFreights(data || []);
-      setSelectedFreights(prev => {
-        const newSet = new Set<string>();
-        if (data) {
-            const currentIds = new Set(data.map(f => f.id));
-            prev.forEach(id => {
-                if (currentIds.has(id)) newSet.add(id);
-            });
-        }
-        return newSet;
-      });
+      if (error) {
+        console.warn(`Erro ao buscar fretes: ${error.message}`);
+      } else {
+        setFreights(data || []);
+        setSelectedFreights(prev => {
+          const newSet = new Set<string>();
+          if (data) {
+              const currentIds = new Set(data.map(f => f.id));
+              prev.forEach(id => {
+                  if (currentIds.has(id)) newSet.add(id);
+              });
+          }
+          return newSet;
+        });
+      }
+    } catch (error: any) {
+      console.warn(`Erro de rede ao buscar fretes: ${error.message}`);
     }
   }, []);
 
@@ -81,7 +84,10 @@ export const ReceivablesView: React.FC = () => {
       .order('received_at', { ascending: false });
     
     if (error) {
-      console.error("Erro ao buscar inbox:", error.message);
+      // Ignora erro de tabela inexistente (42P01) para não poluir o console
+      if (error.code !== '42P01') {
+        console.error("Erro ao buscar inbox:", error.message);
+      }
     } else {
       setInboxCtes(data || []);
     }
@@ -192,29 +198,58 @@ export const ReceivablesView: React.FC = () => {
     setIsProcessingXml(true);
     try {
       const xmlContent = await file.text();
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Extraia dados de CT-e (XML): nCT (cte), dhEmi (date), xNome em toma3 (client), xMun em rem (origin), xMun em dest (destination), vTPrest (total_value).`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `${prompt}\n\nXML:\n${xmlContent}`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              cte: { type: Type.STRING },
-              date: { type: Type.STRING },
-              client: { type: Type.STRING },
-              origin: { type: Type.STRING },
-              destination: { type: Type.STRING },
-              total_value: { type: Type.NUMBER },
-            },
-          },
-        },
+      const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
+      const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
+
+      console.log('Debug API Key (Receivables):', {
+        original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
+        cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
+        length: apiKey.length
       });
 
-      const parsedData = JSON.parse(response.text);
+      if (!apiKey) {
+        throw new Error("Configuração da IA ausente. Verifique se a chave da API está configurada.");
+      }
+
+      // const ai = new GoogleGenAI({ apiKey }); // Removido para usar fetch direto
+      const prompt = `Extraia dados de CT-e (XML): nCT (cte), dhEmi (date), xNome em toma3 (client), xMun em rem (origin), xMun em dest (destination), vTPrest (total_value).`;
+      
+      // Usando fetch direto para garantir o envio correto da chave
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `${prompt}\n\nXML:\n${xmlContent}` }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                cte: { type: "STRING" },
+                date: { type: "STRING" },
+                client: { type: "STRING" },
+                origin: { type: "STRING" },
+                destination: { type: "STRING" },
+                total_value: { type: "NUMBER" },
+              },
+            }
+          }
+        })
+      });
+
+      if (!response.ok) {
+         const errorData = await response.json().catch(() => ({}));
+         throw new Error(errorData.error?.message || `Erro na API: ${response.status}`);
+      }
+
+      const responseJson = await response.json();
+      const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!responseText) throw new Error("IA não retornou dados.");
+
+      const parsedData = JSON.parse(responseText);
 
       setNewFreight(prev => ({
         ...prev,
@@ -229,7 +264,17 @@ export const ReceivablesView: React.FC = () => {
       alert('Dados do XML preenchidos com sucesso!');
     } catch (error: any) {
       console.error("Erro ao processar XML:", error);
-      alert("Erro ao processar o arquivo XML.");
+      let errorMessage = "Erro ao processar o arquivo XML.";
+      
+      if (error.message?.includes('Configuração da IA ausente')) {
+        errorMessage = "A chave da API do Gemini não foi encontrada. Por favor, configure-a no ambiente.";
+      } else if (error.message?.includes('429')) {
+         errorMessage = "Limite de uso da IA excedido. Aguarde alguns instantes e tente novamente.";
+      } else if (error.message?.includes('403')) {
+         errorMessage = "Erro de permissão (403). A chave da API pode estar incorreta ou inválida no ambiente de produção.";
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsProcessingXml(false);
     }

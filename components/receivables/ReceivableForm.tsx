@@ -51,8 +51,8 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({ newFreight, setN
           <div className="md:col-span-2 lg:col-span-1"><DatalistInput label="Origem" name="origin" value={newFreight.origin} onChange={handleChange} options={savedOrigins} id="origin-list"/></div>
           <div className="md:col-span-2 lg:col-span-1"><DatalistInput label="Destino" name="destination" value={newFreight.destination} onChange={handleChange} options={savedDestinations} id="destination-list" /></div>
           <div className="md:col-span-1"><Input label="CT-e" name="cte" value={newFreight.cte} onChange={handleChange} /></div>
-          <div className="md:col-span-1"><Input label="Valor Total (R$)" name="total_value" type="number" value={newFreight.total_value} onChange={handleChange} /></div>
-          <div className="md:col-span-1"><Input label="Pago (R$)" name="paid_value" type="number" value={newFreight.paid_value} onChange={handleChange} /></div>
+          <div className="md:col-span-1"><Input label="Valor Total (R$)" name="total_value" currency value={newFreight.total_value} onChange={handleChange} /></div>
+          <div className="md:col-span-1"><Input label="Pago (R$)" name="paid_value" currency value={newFreight.paid_value} onChange={handleChange} /></div>
           <div className="md:col-span-1"><Input label="Cor da Linha" name="row_color" type="color" value={newFreight.row_color} onChange={handleChange} className="p-1 h-10"/></div>
           <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 gap-2">
             <Button

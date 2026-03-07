@@ -73,18 +73,40 @@ export function TripManagementView() {
     };
   }, [fetchTrips, fetchAutocompleteData]);
 
+  // LOGICA: Atualizar data de chegada e KM final com base nos abastecimentos da viagem ATUAL
   useEffect(() => {
     if (currentTrip.refuelings && currentTrip.refuelings.length > 0) {
       const maxOdometer = currentTrip.refuelings.reduce(
         (max, r) => Math.max(max, Number(r.odometer) || 0),
         0
       );
-      if (maxOdometer > 0 && maxOdometer !== Number(currentTrip.final_km)) {
-        setCurrentTrip(prev => ({ ...prev, final_km: maxOdometer }));
-      }
+      
+      const dates = currentTrip.refuelings
+        .map(r => r.date)
+        .filter(d => !!d)
+        .sort();
+      const lastRefuelingDate = dates.length > 0 ? dates[dates.length - 1] : null;
+
+      setCurrentTrip(prev => {
+        let updates: Partial<Trip> = {};
+        let hasChanges = false;
+
+        if (maxOdometer > 0 && maxOdometer > (Number(prev.final_km) || 0)) {
+          updates.final_km = maxOdometer;
+          hasChanges = true;
+        }
+
+        if (lastRefuelingDate && lastRefuelingDate !== prev.arrival_date) {
+            updates.arrival_date = lastRefuelingDate;
+            hasChanges = true;
+        }
+
+        return hasChanges ? { ...prev, ...updates } : prev;
+      });
     }
   }, [currentTrip.refuelings]);
 
+  // LOGICA: Buscar última placa usada pelo motorista selecionado
   useEffect(() => {
     const fetchLastPlate = async () => {
       if (activeTripId) return;
@@ -114,33 +136,54 @@ export function TripManagementView() {
     return () => clearTimeout(timeoutId);
   }, [currentTrip.driver, activeTripId]);
 
+  // LOGICA CORRIGIDA: Busca robusta do KM inicial baseado no histórico do veículo
   useEffect(() => {
     const fetchLastKm = async () => {
-      if (activeTripId) return;
-      if (!currentTrip.license_plate || !currentTrip.driver) return;
+      if (activeTripId) return; 
+      if (!currentTrip.license_plate) return;
 
       const plate = currentTrip.license_plate.trim().toUpperCase();
+
       try {
-         const { data: kmData } = await supabase
+         // Buscamos as últimas 10 viagens desse veículo para garantir que pegamos o KM mais recente real
+         const { data: recentTrips } = await supabase
           .from('trips')
-          .select('final_km')
-          .eq('driver', currentTrip.driver.trim().toUpperCase())
+          .select('final_km, refuelings, departure_date')
           .eq('license_plate', plate)
           .order('departure_date', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(10);
 
-        if (kmData && kmData.final_km) {
-          setCurrentTrip(prev => ({ ...prev, initial_km: kmData.final_km }));
+        if (recentTrips && recentTrips.length > 0) {
+          let absoluteMaxKm = 0;
+
+          recentTrips.forEach(trip => {
+            // Verifica KM Final da viagem
+            const fkm = Number(trip.final_km) || 0;
+            
+            // Verifica todos os abastecimentos daquela viagem
+            const refuelKms = (trip.refuelings || []).map((r: any) => Number(r.odometer) || 0);
+            const tripMax = Math.max(fkm, ...refuelKms);
+            
+            if (tripMax > absoluteMaxKm) {
+              absoluteMaxKm = tripMax;
+            }
+          });
+
+          if (absoluteMaxKm > 0) {
+            setCurrentTrip(prev => ({ 
+                ...prev, 
+                initial_km: absoluteMaxKm 
+            }));
+          }
         }
       } catch (err) {
-        console.error("Erro ao buscar km:", err);
+        console.error("Erro ao buscar km robusto pela placa:", err);
       }
     };
 
-    const timeoutId = setTimeout(() => fetchLastKm(), 800);
+    const timeoutId = setTimeout(() => fetchLastKm(), 600);
     return () => clearTimeout(timeoutId);
-  }, [currentTrip.driver, currentTrip.license_plate, activeTripId]);
+  }, [currentTrip.license_plate, activeTripId]);
 
   // CÁLCULO DE HISTÓRICO DE MANUTENÇÃO COMPLETO PARA A PLACA ATUAL
   const fullMaintenanceHistory = useMemo(() => {
@@ -149,19 +192,17 @@ export function TripManagementView() {
     const plate = currentTrip.license_plate.trim().toUpperCase();
     const history: (Maintenance & { tripDate?: string })[] = [];
 
-    // Varrer todas as viagens para encontrar manutenções dessa placa
     savedTrips.forEach(t => {
         if (t.license_plate === plate && t.maintenances && t.maintenances.length > 0) {
             t.maintenances.forEach(m => {
                 history.push({
                     ...m,
-                    tripDate: t.departure_date // Data da viagem como fallback se a manutenção não tiver data
+                    tripDate: t.departure_date 
                 });
             });
         }
     });
 
-    // Ordenar por data (mais recente primeiro)
     return history.sort((a, b) => {
         const dateA = a.date || a.tripDate || '';
         const dateB = b.date || b.tripDate || '';
@@ -169,40 +210,27 @@ export function TripManagementView() {
     });
   }, [currentTrip.license_plate, savedTrips]);
 
-  // CÁLCULO DAS ÚLTIMAS OCORRÊNCIAS ÚNICAS (Para exibir no box de resumo)
   const uniqueLastMaintenances = useMemo(() => {
     const uniqueMap = new Map<string, Maintenance>();
-    
     fullMaintenanceHistory.forEach(item => {
         if (!item.type) return;
         const normalizedType = item.type.trim().toUpperCase();
-        
-        // Como o array já está ordenado por data (desc), o primeiro que encontrarmos é o mais recente
         if (!uniqueMap.has(normalizedType)) {
             uniqueMap.set(normalizedType, item);
         }
     });
-
     return Array.from(uniqueMap.values());
   }, [fullMaintenanceHistory]);
 
   const maintenanceAlerts = useMemo(() => {
     if (!currentTrip.license_plate || !currentTrip.initial_km) return [];
-    
     const currentKm = Number(currentTrip.initial_km);
     const alerts: string[] = [];
-    
-    // Normalizar tipos sendo feitos agora
-    const typesBeingFixed = new Set(
-        currentTrip.maintenances.map(m => m.type ? m.type.trim().toLowerCase() : '')
-    );
+    const typesBeingFixed = new Set(currentTrip.maintenances.map(m => m.type ? m.type.trim().toLowerCase() : ''));
 
-    // Usar a lista de ÚNICAS manutenções recentes para verificar vencimentos
     uniqueLastMaintenances.forEach(maint => {
         if (!maint.type || !maint.next_km) return;
         const normalizedType = maint.type.trim().toLowerCase();
-
-        // Se já está sendo consertado agora, ignora alerta
         if (typesBeingFixed.has(normalizedType)) return;
 
         const nextKm = Number(maint.next_km);
@@ -214,7 +242,6 @@ export function TripManagementView() {
             alerts.push(`ATENÇÃO: ${maint.type} vence em ${remaining} km (Próxima troca: ${nextKm} km)`);
         }
     });
-    
     return alerts;
   }, [currentTrip.license_plate, currentTrip.initial_km, currentTrip.maintenances, uniqueLastMaintenances]);
 
@@ -223,15 +250,11 @@ export function TripManagementView() {
     const totalDieselCost = currentTrip.refuelings.reduce((acc, r) => acc + (Number(r.value) || 0), 0);
     const totalExpenses = currentTrip.expenses.reduce((acc, e) => acc + (Number(e.value) || 0), 0);
     const totalMaintenance = (currentTrip.maintenances || []).reduce((acc, m) => acc + (Number(m.value) || 0), 0);
-    
     const profit = totalFreights - (totalDieselCost + totalExpenses + totalMaintenance);
-    
     const totalLiters = currentTrip.refuelings.reduce((acc, r) => acc + (Number(r.liters) || 0), 0);
-    
     const initialKm = Number(currentTrip.initial_km) || 0;
     const finalKm = Number(currentTrip.final_km) || 0;
     const distance = finalKm > initialKm ? finalKm - initialKm : 0;
-
     const averageKmL = totalLiters > 0 && distance > 0 ? distance / totalLiters : 0;
     const averagePricePerLiter = totalLiters > 0 ? totalDieselCost / totalLiters : 0;
 
@@ -272,33 +295,19 @@ export function TripManagementView() {
   const handleSaveTrip = useCallback(async () => {
     const tripToSave = { 
         ...currentTrip,
+        arrival_date: currentTrip.arrival_date || null,
         driver: currentTrip.driver ? currentTrip.driver.trim().toUpperCase() : '',
         license_plate: currentTrip.license_plate ? currentTrip.license_plate.trim().toUpperCase() : '',
         departure_date: currentTrip.departure_date || null,
-        arrival_date: currentTrip.arrival_date || null,
         initial_km: currentTrip.initial_km === '' ? null : currentTrip.initial_km,
         final_km: currentTrip.final_km === '' ? null : currentTrip.final_km,
-        freights: currentTrip.freights.map(f => ({
-            ...f,
-            origin: f.origin ? f.origin.trim() : '',
-            destination: f.destination ? f.destination.trim() : ''
-        })),
-        refuelings: currentTrip.refuelings.map(r => ({
-            ...r,
-            location: r.location ? r.location.trim() : ''
-        })),
-        expenses: currentTrip.expenses.map(e => ({
-            ...e,
-            description: e.description ? e.description.trim() : ''
-        })),
-        maintenances: currentTrip.maintenances.map(m => ({
-            ...m,
-            type: m.type ? m.type.trim() : ''
-        }))
+        freights: currentTrip.freights.map(f => ({ ...f, origin: f.origin ? f.origin.trim() : '', destination: f.destination ? f.destination.trim() : '' })),
+        refuelings: currentTrip.refuelings.map(r => ({ ...r, location: r.location ? r.location.trim() : '' })),
+        expenses: currentTrip.expenses.map(e => ({ ...e, description: e.description ? e.description.trim() : '' })),
+        maintenances: currentTrip.maintenances.map(m => ({ ...m, type: m.type ? m.type.trim() : '' }))
     };
     
     const { error } = await supabase.from('trips').upsert(tripToSave);
-
     if (error) {
       alert(`Erro ao salvar viagem: ${error.message}`);
     } else {
@@ -331,9 +340,7 @@ export function TripManagementView() {
             alert(`Erro ao excluir viagem: ${error.message}`);
         } else {
             alert('Viagem excluída com sucesso.');
-            if (activeTripId === tripId) {
-                handleNewTrip();
-            }
+            if (activeTripId === tripId) handleNewTrip();
             await fetchTrips();
             await fetchAutocompleteData();
         }
@@ -372,7 +379,6 @@ export function TripManagementView() {
     
     currentY += 10;
     
-    // Header Info
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.text(`Motorista: ${currentTrip.driver}`, marginLeft, currentY);
@@ -435,10 +441,18 @@ export function TripManagementView() {
     if (currentTrip.refuelings.length > 0) {
         doc.text('Abastecimentos', marginLeft, currentY);
         currentY += 2;
+
+        const sortedRefuelings = [...currentTrip.refuelings].sort((a, b) => {
+             if (!a.date && !b.date) return 0;
+             if (!a.date) return -1;
+             if (!b.date) return 1;
+             return b.date.localeCompare(a.date);
+        });
+
         autoTable(doc, {
             startY: currentY + 2,
             head: [['Data', 'Local', 'Litros', 'Valor']],
-            body: currentTrip.refuelings.map(r => [
+            body: sortedRefuelings.map(r => [
                 r.date ? new Date(r.date).toLocaleDateString('pt-BR') : '-',
                 r.location,
                 Number(r.liters).toFixed(2) + ' L',
@@ -449,7 +463,6 @@ export function TripManagementView() {
         currentY = (doc as any).lastAutoTable.finalY + 10;
     }
 
-    // Totais
     currentY += 5;
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');

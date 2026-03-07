@@ -7,31 +7,37 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function getDistinctValues(table: string, column: string): Promise<string[]> {
-    const { data, error } = await supabase
-        .from(table)
-        .select(column);
+    try {
+        const { data, error } = await supabase
+            .from(table)
+            .select(column)
+            .limit(1000); // Limit to avoid massive fetches that might timeout
 
-    if (error) {
-        console.error(`Error fetching distinct values for ${column} from ${table}:`, error.message);
-        throw error;
-    }
+        if (error) {
+            console.warn(`Error fetching distinct values for ${column} from ${table}:`, error.message);
+            return [];
+        }
 
-    if (!data) {
+        if (!data) {
+            return [];
+        }
+
+        const uniqueValues = new Set<string>();
+
+        if (Array.isArray(data)) {
+            data.forEach((item: any) => {
+                const value = item?.[column];
+                if (value) {
+                    uniqueValues.add(String(value).trim().toUpperCase());
+                }
+            });
+        }
+        
+        return Array.from(uniqueValues).sort();
+    } catch (error: any) {
+        console.warn(`Network error fetching distinct values for ${column} from ${table}:`, error.message);
         return [];
     }
-
-    const uniqueValues = new Set<string>();
-
-    if (Array.isArray(data)) {
-        data.forEach((item: any) => {
-            const value = item?.[column];
-            if (value) {
-                uniqueValues.add(String(value).trim().toUpperCase());
-            }
-        });
-    }
-    
-    return Array.from(uniqueValues).sort();
 }
 
 export async function saveAutocompleteValue(category: string, value: string) {
@@ -48,15 +54,20 @@ export async function saveAutocompleteValue(category: string, value: string) {
 }
 
 export async function getSavedAutocompleteValues(category: string): Promise<string[]> {
-    const { data, error } = await supabase
-        .from('saved_entries')
-        .select('value')
-        .eq('category', category);
+    try {
+        const { data, error } = await supabase
+            .from('saved_entries')
+            .select('value')
+            .eq('category', category);
 
-    if (error) {
-        console.warn(`Error fetching saved values for ${category}:`, error.message);
+        if (error) {
+            console.warn(`Error fetching saved values for ${category}:`, error.message);
+            return [];
+        }
+
+        return (data || []).map((item: any) => item.value).sort();
+    } catch (error: any) {
+        console.warn(`Network error fetching saved values for ${category}:`, error.message);
         return [];
     }
-
-    return (data || []).map((item: any) => item.value).sort();
 }

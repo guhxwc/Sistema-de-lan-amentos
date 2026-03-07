@@ -5,7 +5,7 @@ export const getInitialTrip = (): Trip => ({
   id: crypto.randomUUID(),
   driver: '',
   license_plate: '',
-  departure_date: '',
+  departure_date: new Date().toISOString().split('T')[0],
   arrival_date: '',
   initial_km: '',
   final_km: '',

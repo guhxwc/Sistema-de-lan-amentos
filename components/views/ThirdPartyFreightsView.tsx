@@ -11,7 +11,6 @@ import { Card, CardContent } from '../ui/Card';
 import { Select } from '../ui/Select';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { GoogleGenAI, Type } from '@google/genai';
 
 const calculateStatus = (paidFreight: number, advance: number): 'Pago' | 'Parcial' | 'Pendente' => {
     // Lógica ajustada: O saldo é (Frete Combinado) - Adiantamento
@@ -77,27 +76,30 @@ export const ThirdPartyFreightsView: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('todos');
 
   const fetchFreights = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('third_party_freights')
-      .select('*')
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false }); // Ordenação secundária para estabilidade
+    try {
+      const { data, error } = await supabase
+        .from('third_party_freights')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      alert(`Erro ao buscar fretes de terceiros: ${error.message}`);
-    } else {
-      const dataList = data || [];
-      setFreights(dataList);
-      
-      // Clean up selection for items that no longer exist
-      setSelectedFreights(prev => {
-        const newSet = new Set<string>();
-        const currentIds = new Set(dataList.map(f => f.id));
-        prev.forEach(id => {
-            if (currentIds.has(id)) newSet.add(id);
+      if (error) {
+        console.warn(`Erro ao buscar fretes de terceiros: ${error.message}`);
+      } else {
+        const dataList = data || [];
+        setFreights(dataList);
+        
+        setSelectedFreights(prev => {
+          const newSet = new Set<string>();
+          const currentIds = new Set(dataList.map(f => f.id));
+          prev.forEach(id => {
+              if (currentIds.has(id)) newSet.add(id);
+          });
+          return newSet;
         });
-        return newSet;
-      });
+      }
+    } catch (error: any) {
+      console.warn(`Erro de rede ao buscar fretes de terceiros: ${error.message}`);
     }
   }, []);
 
@@ -227,7 +229,28 @@ export const ThirdPartyFreightsView: React.FC = () => {
     setIsProcessingXml(true);
     try {
       const xmlContent = await file.text();
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      let rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
+      
+      if (!rawApiKey) {
+          try {
+              // @ts-ignore
+              rawApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
+          } catch (e) {
+              console.warn('Falha ao acessar process.env:', e);
+          }
+      }
+
+      const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
+
+      console.log('Debug API Key (ThirdParty):', {
+        original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
+        cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
+        length: apiKey.length
+      });
+
+      // Limpeza
+      // apiKey já foi limpa na declaração
       
       const prompt = `Você é um assistente de logística. Analise este XML de transporte (CT-e ou MDF-e) e extraia os dados para cadastro de frete terceiro.
       
@@ -241,25 +264,43 @@ export const ThirdPartyFreightsView: React.FC = () => {
       XML:
       ${xmlContent}`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              driver: { type: Type.STRING, description: "Nome do motorista" },
-              license_plate: { type: Type.STRING, description: "Placa do veículo" },
-              origin: { type: Type.STRING, description: "Cidade de origem" },
-              destination: { type: Type.STRING, description: "Cidade de destino" },
-            },
-            required: ['driver', 'license_plate', 'origin', 'destination']
-          },
+      // Usando fetch direto para garantir o envio correto da chave e evitar erros da SDK
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                driver: { type: "STRING", description: "Nome do motorista" },
+                license_plate: { type: "STRING", description: "Placa do veículo" },
+                origin: { type: "STRING", description: "Cidade de origem" },
+                destination: { type: "STRING", description: "Cidade de destino" },
+              },
+              required: ['driver', 'license_plate', 'origin', 'destination']
+            }
+          }
+        })
       });
 
-      const parsedData = JSON.parse(response.text);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Erro na API: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!responseText) {
+        throw new Error("A IA não retornou texto válido.");
+      }
+
+      const parsedData = JSON.parse(responseText);
 
       setNewFreight(prev => ({
         ...prev,
@@ -274,11 +315,21 @@ export const ThirdPartyFreightsView: React.FC = () => {
     } catch (error: any) {
       console.error("Erro ao processar XML:", error);
       
-      let errorMessage = "Erro ao processar XML. Verifique se é um arquivo válido.";
+      let errorMessage = "Erro ao processar XML.";
       
-      if (error.message?.includes('429') || error.status === 429 || error.message?.includes('Resource has been exhausted')) {
-         errorMessage = "Limite de uso da IA excedido (Erro 429). A cota da API foi atingida. Por favor, aguarde alguns instantes e tente novamente ou preencha os campos manualmente.";
-      } else if (error.message) {
+      // Recupera a chave usada para debug na mensagem de erro (apenas prefixo)
+      let currentKey = '';
+      if (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) currentKey = import.meta.env.VITE_GEMINI_API_KEY;
+      else if (typeof process !== 'undefined' && process.env) currentKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+      const keyDebug = currentKey ? `(Key: ${currentKey.substring(0, 4)}...)` : '(Key: Vazia)';
+
+      if (error.message?.includes('Configuração da IA ausente') || error.message?.includes('Chave de API vazia')) {
+        errorMessage = `A chave da API do Gemini não foi encontrada no ambiente publicado. ${keyDebug}`;
+      } else if (error.message?.includes('429') || error.status === 429) {
+         errorMessage = "Limite de uso da IA excedido (Erro 429). Tente novamente em instantes.";
+      } else if (error.message?.includes('403') || error.status === 403) {
+         errorMessage = `Erro de permissão (403). A chave pode estar inválida ou não autorizada para este domínio. ${keyDebug} Detalhe: ${error.message}`;
+      } else {
          errorMessage += ` Detalhes: ${error.message}`;
       }
       
@@ -311,19 +362,23 @@ export const ThirdPartyFreightsView: React.FC = () => {
         destination: newFreight.destination.trim().toUpperCase(),
         status: calculateStatus(paidFreight, advance)
     };
-    const { error } = await supabase.from('third_party_freights').upsert(freightToAdd);
-    if (error) {
-        alert(`Erro ao adicionar frete: ${error.message}`);
-    } else {
-        // Salvar dados para autocompletar futuro (Persistência)
-        await saveSuggestions(freightToAdd);
+    try {
+      const { error } = await supabase.from('third_party_freights').upsert(freightToAdd);
+      if (error) {
+          alert(`Erro ao adicionar frete: ${error.message}`);
+      } else {
+          // Salvar dados para autocompletar futuro (Persistência)
+          await saveSuggestions(freightToAdd);
 
-        alert('Frete de terceiro adicionado com sucesso!');
-        setNewFreight(getInitialThirdPartyFreight());
-        // Resetamos o ref para que se adicionar o mesmo motorista novamente, a lógica funcione se necessário
-        prevDriverRef.current = ''; 
-        fetchFreights();
-        fetchAutocompleteData();
+          alert('Frete de terceiro adicionado com sucesso!');
+          setNewFreight(getInitialThirdPartyFreight());
+          // Resetamos o ref para que se adicionar o mesmo motorista novamente, a lógica funcione se necessário
+          prevDriverRef.current = ''; 
+          fetchFreights();
+          fetchAutocompleteData();
+      }
+    } catch (error: any) {
+      alert(`Erro de rede ao adicionar frete: ${error.message}`);
     }
   }, [newFreight, fetchFreights, fetchAutocompleteData]);
 
@@ -346,16 +401,20 @@ export const ThirdPartyFreightsView: React.FC = () => {
         status: calculateStatus(paidFreight, advance)
     };
     
-    const { error } = await supabase.from('third_party_freights').update(freightWithCorrectStatus).eq('id', freightWithCorrectStatus.id);
-    if (error) {
-        alert(`Erro ao atualizar frete: ${error.message}`);
-    } else {
-        await saveSuggestions(freightWithCorrectStatus);
+    try {
+      const { error } = await supabase.from('third_party_freights').update(freightWithCorrectStatus).eq('id', freightWithCorrectStatus.id);
+      if (error) {
+          alert(`Erro ao atualizar frete: ${error.message}`);
+      } else {
+          await saveSuggestions(freightWithCorrectStatus);
 
-        alert('Frete atualizado com sucesso.');
-        setEditingFreight(null);
-        fetchFreights();
-        fetchAutocompleteData();
+          alert('Frete atualizado com sucesso.');
+          setEditingFreight(null);
+          fetchFreights();
+          fetchAutocompleteData();
+      }
+    } catch (error: any) {
+      alert(`Erro de rede ao atualizar frete: ${error.message}`);
     }
   }, [fetchFreights, fetchAutocompleteData]);
 
