@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
     // Prioritize environment variables from shell, then from .env files
     const geminiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '';
     
+    // Inject explicitly so import.meta.env picks it up automatically during build
+    if (geminiKey) {
+        process.env.VITE_GEMINI_API_KEY = geminiKey;
+    }
+    
     return {
       server: {
         port: 3000,

@@ -139,7 +139,7 @@ export const FiscalNotesView: React.FC = () => {
   }, [notes, filterStatus, filterClientDelivered, searchTerm]);
 
   const extractDataFromXml = async (xmlContent: string) => {
-    const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
+    const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
     const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
 
     console.log('Debug API Key (FiscalNotes):', {

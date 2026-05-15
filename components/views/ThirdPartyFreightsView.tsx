@@ -231,15 +231,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
       const xmlContent = await file.text();
       
       let rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
-      
-      if (!rawApiKey) {
-          try {
-              // @ts-ignore
-              rawApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
-          } catch (e) {
-              console.warn('Falha ao acessar process.env:', e);
-          }
-      }
 
       const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
 
@@ -320,7 +311,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
       // Recupera a chave usada para debug na mensagem de erro (apenas prefixo)
       let currentKey = '';
       if (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) currentKey = import.meta.env.VITE_GEMINI_API_KEY;
-      else if (typeof process !== 'undefined' && process.env) currentKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+
       const keyDebug = currentKey ? `(Key: ${currentKey.substring(0, 4)}...)` : '(Key: Vazia)';
 
       if (error.message?.includes('Configuração da IA ausente') || error.message?.includes('Chave de API vazia')) {
@@ -352,6 +343,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
 
     const freightToAdd: ThirdPartyFreight = { 
         ...newFreight, 
+        date: newFreight.date || null,
         company_freight_value: companyFreight,
         paid_freight_value: paidFreight,
         toll_value: tollValue,
@@ -390,6 +382,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
 
     const freightWithCorrectStatus: ThirdPartyFreight = {
         ...updatedFreight,
+        date: updatedFreight.date || null,
         company_freight_value: companyFreight,
         paid_freight_value: paidFreight,
         toll_value: tollValue,

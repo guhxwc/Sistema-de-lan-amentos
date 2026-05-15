@@ -198,7 +198,7 @@ export const ReceivablesView: React.FC = () => {
     setIsProcessingXml(true);
     try {
       const xmlContent = await file.text();
-      const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
+      const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
       const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
 
       console.log('Debug API Key (Receivables):', {
@@ -317,6 +317,8 @@ export const ReceivablesView: React.FC = () => {
         client: newFreight.client.trim().toUpperCase(),
         origin: newFreight.origin.trim().toUpperCase(),
         destination: newFreight.destination.trim().toUpperCase(),
+        date: newFreight.date || null,
+        due_date: newFreight.due_date || null,
         delivery_date: newFreight.delivery_date || null,
         total_value: (newFreight.total_value as any) === '' ? 0 : newFreight.total_value,
         paid_value: (newFreight.paid_value as any) === '' ? 0 : newFreight.paid_value,
@@ -353,6 +355,8 @@ export const ReceivablesView: React.FC = () => {
         client: updatedFreight.client.trim().toUpperCase(),
         origin: updatedFreight.origin.trim().toUpperCase(),
         destination: updatedFreight.destination.trim().toUpperCase(),
+        date: updatedFreight.date || null,
+        due_date: updatedFreight.due_date || null,
         delivery_date: updatedFreight.delivery_date || null,
         total_value: (updatedFreight.total_value as any) === '' ? 0 : updatedFreight.total_value,
         paid_value: (updatedFreight.paid_value as any) === '' ? 0 : updatedFreight.paid_value,
