@@ -97,24 +97,6 @@ export const FreightProrationView: React.FC = () => {
     setProcessingStatus('Iniciando leitura...');
     
     const newItems: InvoiceItem[] = [];
-    const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
-    const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
-    
-    console.log('Debug API Key (FreightProration):', {
-      original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
-      cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
-      length: apiKey.length
-    });
-
-    if (!apiKey) {
-      alert("Configuração da IA ausente. Verifique se a chave da API está configurada no ambiente.");
-      setIsProcessingXml(false);
-      setProcessingStatus('');
-      return;
-    }
-
-    // const ai = new GoogleGenAI({ apiKey }); // Removido para usar fetch direto
-
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -130,8 +112,7 @@ export const FreightProrationView: React.FC = () => {
             
             Retorne JSON numérico para valor e peso.`;
 
-            // Usando fetch direto para garantir o envio correto da chave
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+            const response = await fetch(`/api/gemini`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'

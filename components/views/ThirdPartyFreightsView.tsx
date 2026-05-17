@@ -230,19 +230,6 @@ export const ThirdPartyFreightsView: React.FC = () => {
     try {
       const xmlContent = await file.text();
       
-      let rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
-
-      const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
-
-      console.log('Debug API Key (ThirdParty):', {
-        original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
-        cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
-        length: apiKey.length
-      });
-
-      // Limpeza
-      // apiKey já foi limpa na declaração
-      
       const prompt = `Você é um assistente de logística. Analise este XML de transporte (CT-e ou MDF-e) e extraia os dados para cadastro de frete terceiro.
       
       Procure especificamente por:
@@ -255,8 +242,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
       XML:
       ${xmlContent}`;
 
-      // Usando fetch direto para garantir o envio correto da chave e evitar erros da SDK
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+      const response = await fetch(`/api/gemini`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -310,8 +296,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
       
       // Recupera a chave usada para debug na mensagem de erro (apenas prefixo)
       let currentKey = '';
-      if (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) currentKey = import.meta.env.VITE_GEMINI_API_KEY;
-
+      
       const keyDebug = currentKey ? `(Key: ${currentKey.substring(0, 4)}...)` : '(Key: Vazia)';
 
       if (error.message?.includes('Configuração da IA ausente') || error.message?.includes('Chave de API vazia')) {

@@ -139,21 +139,6 @@ export const FiscalNotesView: React.FC = () => {
   }, [notes, filterStatus, filterClientDelivered, searchTerm]);
 
   const extractDataFromXml = async (xmlContent: string) => {
-    const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
-    const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
-
-    console.log('Debug API Key (FiscalNotes):', {
-      original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
-      cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
-      length: apiKey.length
-    });
-    
-    if (!apiKey) {
-      throw new Error("Configuração da IA ausente. Verifique se a chave da API está configurada.");
-    }
-
-    // const ai = new GoogleGenAI({ apiKey }); // Removido para usar fetch direto
-    
     // Atualizado para extrair APENAS o número da NF (nNF) e ignorar a série e remover zeros a esquerda
     // Atualizado para extrair Nome do Destinatário/Recebedor ao invés da cidade
     const prompt = `Atue como um especialista em processamento de XML de documentos fiscais brasileiros (CT-e e NF-e).
@@ -189,8 +174,7 @@ export const FiscalNotesView: React.FC = () => {
       XML:
       ${xmlContent}`;
 
-      // Usando fetch direto para garantir o envio correto da chave
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+      const response = await fetch(`/api/gemini`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

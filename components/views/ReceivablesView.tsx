@@ -198,24 +198,10 @@ export const ReceivablesView: React.FC = () => {
     setIsProcessingXml(true);
     try {
       const xmlContent = await file.text();
-      const rawApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || '';
-      const apiKey = rawApiKey ? rawApiKey.replace(/["']/g, '').trim() : '';
 
-      console.log('Debug API Key (Receivables):', {
-        original: rawApiKey ? `${rawApiKey.substring(0, 5)}...` : 'empty',
-        cleaned: apiKey ? `${apiKey.substring(0, 5)}...` : 'empty',
-        length: apiKey.length
-      });
-
-      if (!apiKey) {
-        throw new Error("Configuração da IA ausente. Verifique se a chave da API está configurada.");
-      }
-
-      // const ai = new GoogleGenAI({ apiKey }); // Removido para usar fetch direto
       const prompt = `Extraia dados de CT-e (XML): nCT (cte), dhEmi (date), xNome em toma3 (client), xMun em rem (origin), xMun em dest (destination), vTPrest (total_value).`;
       
-      // Usando fetch direto para garantir o envio correto da chave
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
+      const response = await fetch(`/api/gemini`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
