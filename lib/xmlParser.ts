@@ -82,7 +82,57 @@ export function parseFiscalXml(xmlString: string): ParsedXmlData {
     data.origin = getTagFromPath(['rem', 'xMun']) || getTagContent('xMunIni') || '';
     data.destination = getTagFromPath(['dest', 'xMun']) || getTagContent('xMunFim') || '';
     
-    data.client = getTagFromPath(['toma3', 'xNome']) || getTagFromPath(['dest', 'xNome']) || '';
+    // Resolve tomador (toma3 / toma4) - O cliente é o tomador do frete
+    let tomadorName = '';
+    
+    // 1. Verificar se existe <toma4> (Tomador especificado diretamente)
+    const toma4Nodes = doc.getElementsByTagName('toma4');
+    if (toma4Nodes.length > 0) {
+      const xNomeNode = toma4Nodes[0].getElementsByTagName('xNome')[0];
+      if (xNomeNode && xNomeNode.textContent) {
+        tomadorName = xNomeNode.textContent;
+      }
+    }
+    
+    // 2. Se não encontrou, verificar <toma3> que indica por código quem é o tomador
+    if (!tomadorName) {
+      const toma3Nodes = doc.getElementsByTagName('toma3');
+      if (toma3Nodes.length > 0) {
+        const tomaNode = toma3Nodes[0].getElementsByTagName('toma')[0];
+        if (tomaNode && tomaNode.textContent) {
+          const tomaCode = tomaNode.textContent.trim();
+          if (tomaCode === '0') {
+            // 0 - Remetente (rem)
+            const remNodes = doc.getElementsByTagName('rem');
+            if (remNodes.length > 0) tomadorName = remNodes[0].getElementsByTagName('xNome')[0]?.textContent || '';
+          } else if (tomaCode === '1') {
+            // 1 - Expedidor (exped)
+            const expedNodes = doc.getElementsByTagName('exped');
+            if (expedNodes.length > 0) tomadorName = expedNodes[0].getElementsByTagName('xNome')[0]?.textContent || '';
+          } else if (tomaCode === '2') {
+            // 2 - Recebedor (receb)
+            const recebNodes = doc.getElementsByTagName('receb');
+            if (recebNodes.length > 0) tomadorName = recebNodes[0].getElementsByTagName('xNome')[0]?.textContent || '';
+          } else if (tomaCode === '3') {
+            // 3 - Destinatário (dest)
+            const destNodes = doc.getElementsByTagName('dest');
+            if (destNodes.length > 0) tomadorName = destNodes[0].getElementsByTagName('xNome')[0]?.textContent || '';
+          }
+        }
+        
+        // Se <toma3> possuir tag <xNome> diretamente
+        if (!tomadorName) {
+          tomadorName = toma3Nodes[0].getElementsByTagName('xNome')[0]?.textContent || '';
+        }
+      }
+    }
+
+    // 3. Fallbacks se não achou o tomador por código ou nome específico
+    if (!tomadorName) {
+      tomadorName = getTagFromPath(['dest', 'xNome']) || getTagFromPath(['rem', 'xNome']) || '';
+    }
+
+    data.client = tomadorName;
     data.company = getTagFromPath(['rem', 'xNome']);
     data.delivery_location = getTagFromPath(['receb', 'xNome']) || getTagFromPath(['dest', 'xNome']);
     
