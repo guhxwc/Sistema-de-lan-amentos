@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { ReceivableFreight, ProcessedCte } from '../../types';
 import { supabase, getDistinctValues } from '../../lib/supabaseClient';
+import { parseFiscalXml } from '../../lib/xmlParser';
 import { SummaryCards } from '../receivables/SummaryCards';
 import { ReceivableForm } from '../receivables/ReceivableForm';
 import { ReceivablesTable } from '../receivables/ReceivablesTable';
@@ -198,50 +199,13 @@ export const ReceivablesView: React.FC = () => {
     setIsProcessingXml(true);
     try {
       const xmlContent = await file.text();
-
-      const prompt = `Extraia dados de CT-e (XML): nCT (cte), dhEmi (date), xNome em toma3 (client), xMun em rem (origin), xMun em dest (destination), vTPrest (total_value).`;
-      
-      const response = await fetch(`/api/gemini`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${prompt}\n\nXML:\n${xmlContent}` }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                cte: { type: "STRING" },
-                date: { type: "STRING" },
-                client: { type: "STRING" },
-                origin: { type: "STRING" },
-                destination: { type: "STRING" },
-                total_value: { type: "NUMBER" },
-              },
-            }
-          }
-        })
-      });
-
-      if (!response.ok) {
-         const errorData = await response.json().catch(() => ({}));
-         throw new Error(errorData.error?.message || `Erro na API: ${response.status}`);
-      }
-
-      const responseJson = await response.json();
-      const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!responseText) throw new Error("IA não retornou dados.");
-
-      const parsedData = JSON.parse(responseText);
+      const parsedData = parseFiscalXml(xmlContent);
 
       setNewFreight(prev => ({
         ...prev,
-        cte: parsedData.cte || '',
+        cte: parsedData.cte || parsedData.mdfe || '',
         date: parsedData.date?.split('T')[0] || prev.date,
-        client: parsedData.client || '',
+        client: parsedData.client || parsedData.company || '',
         origin: parsedData.origin || '',
         destination: parsedData.destination || '',
         total_value: parsedData.total_value || 0,
@@ -250,17 +214,7 @@ export const ReceivablesView: React.FC = () => {
       alert('Dados do XML preenchidos com sucesso!');
     } catch (error: any) {
       console.error("Erro ao processar XML:", error);
-      let errorMessage = "Erro ao processar o arquivo XML.";
-      
-      if (error.message?.includes('Configuração da IA ausente')) {
-        errorMessage = "A chave da API do Gemini não foi encontrada. Por favor, configure-a no ambiente.";
-      } else if (error.message?.includes('429')) {
-         errorMessage = "Limite de uso da IA excedido. Aguarde alguns instantes e tente novamente.";
-      } else if (error.message?.includes('403')) {
-         errorMessage = "Erro de permissão (403). A chave da API pode estar incorreta ou inválida no ambiente de produção.";
-      }
-      
-      alert(errorMessage);
+      alert("Erro ao processar o arquivo XML localmente.");
     } finally {
       setIsProcessingXml(false);
     }

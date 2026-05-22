@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { parseFiscalXml } from '../../lib/xmlParser';
 
 interface InvoiceItem {
   id: string;
@@ -105,46 +106,12 @@ export const FreightProrationView: React.FC = () => {
         try {
             const xmlContent = await file.text();
             
-            const prompt = `Analise este XML de Documento Fiscal (NFe ou CTe) e extraia:
-            1. Número (tag <nNF> ou <nCT>). Remova zeros à esquerda.
-            2. Valor Total (tag <vNF> dentro de <ICMSTot>, ou <vTPrest> se CTe).
-            3. Peso Bruto (tag <pesoB>). Se não existir, tente Peso Líquido (<pesoL>) ou <qCarga>. Se não encontrar, retorne 0.
-            
-            Retorne JSON numérico para valor e peso.`;
-
-            const response = await fetch(`/api/gemini`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: `${prompt}\n\nXML:\n${xmlContent}` }] }],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: {
-                    type: "OBJECT",
-                    properties: {
-                      number: { type: "STRING" },
-                      value: { type: "NUMBER" },
-                      weight: { type: "NUMBER" },
-                    },
-                    required: ['number', 'value']
-                  }
-                }
-              })
-            });
-
-            if (!response.ok) {
-               const errorData = await response.json().catch(() => ({}));
-               throw new Error(errorData.error?.message || `Erro na API: ${response.status}`);
-            }
-
-            const responseJson = await response.json();
-            const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (!responseText) throw new Error("IA não retornou dados.");
-
-            const data = JSON.parse(responseText);
+            const parsedData = parseFiscalXml(xmlContent);
+            const data = {
+                number: parsedData.nfe || parsedData.cte || parsedData.mdfe || '',
+                value: parsedData.total_value || 0,
+                weight: parsedData.weight || 0
+            };
             
             // Validação básica para evitar "zerados" indesejados
             if (data.value && data.value > 0) {
@@ -157,9 +124,6 @@ export const FreightProrationView: React.FC = () => {
             } else {
                 console.warn(`Arquivo ${file.name} retornou valor 0 ou inválido.`);
             }
-
-            // Pequeno delay para ser gentil com a API se houver muitos arquivos
-            if (files.length > 1) await new Promise(r => setTimeout(r, 500));
 
         } catch (err) {
             console.error(`Erro ao processar arquivo ${file.name}:`, err);

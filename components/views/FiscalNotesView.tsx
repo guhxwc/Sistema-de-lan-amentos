@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { FiscalNote } from '../../types';
 import { supabase, getDistinctValues } from '../../lib/supabaseClient';
+import { parseFiscalXml } from '../../lib/xmlParser';
 import { FiscalNoteForm } from '../fiscalNotes/FiscalNoteForm';
 import { FiscalNotesTable } from '../fiscalNotes/FiscalNotesTable';
 import { EditFiscalNoteModal } from '../fiscalNotes/EditFiscalNoteModal';
@@ -139,75 +140,13 @@ export const FiscalNotesView: React.FC = () => {
   }, [notes, filterStatus, filterClientDelivered, searchTerm]);
 
   const extractDataFromXml = async (xmlContent: string) => {
-    // Atualizado para extrair APENAS o número da NF (nNF) e ignorar a série e remover zeros a esquerda
-    // Atualizado para extrair Nome do Destinatário/Recebedor ao invés da cidade
-    const prompt = `Atue como um especialista em processamento de XML de documentos fiscais brasileiros (CT-e e NF-e).
-      
-      Regras RÍGIDAS para extração de dados:
-      
-      1. **company** (Empresa/Cliente):
-         - Se o XML for um **CT-e** (Conhecimento de Transporte): Extraia o nome do **REMETENTE** (tag <rem><xNome>).
-           **ATENÇÃO:** JAMAIS extraia o nome do Emitente (<emit>), pois em um CT-e o emitente é a transportadora.
-         - Se o XML for uma **NF-e** (Nota Fiscal): Extraia o nome do **EMITENTE** (tag <emit><xNome>).
-      
-      2. **delivery_location** (Local de Entrega):
-         - **Prioridade 1:** Se houver um **RECEBEDOR** identificado (tag <receb>), extraia o **NOME** (<xNome>) dentro de <receb>.
-         - **Prioridade 2:** Caso contrário, extraia o **NOME** (<xNome>) do **DESTINATÁRIO** dentro de <dest>.
-         - **IMPORTANTE:** Extraia o NOME da empresa/pessoa, **NÃO** extraia a cidade/município.
-      
-      3. **nf_number** (Número da NF):
-         - Extraia APENAS o **Número da Nota Fiscal** (nNF).
-         - **IMPORTANTE**:
-           - NÃO inclua a série.
-           - NÃO extraia o número do CT-e (<nCT>).
-           - **REMOVA zeros à esquerda**. Exemplo: "000008348" deve ser retornado como "8348".
-         - Se for **NF-e**: Extraia o conteúdo de <nNF>.
-         - Se for **CT-e**: Procure pela chave de acesso da NF-e referenciada na tag <infNFe>.
-           - Na chave de 44 dígitos, o número da NF está nas posições **26 a 34** (9 dígitos).
-           - Exemplo: Na chave "...55001000028496...", o número é "000028496". Retorne "28496".
-      
-      4. **shipping_date** (Data):
-         - Extraia a data de emissão (<dhEmi>). Formato: AAAA-MM-DD.
-
-      Retorne APENAS um objeto JSON com as chaves: company, nf_number, delivery_location, shipping_date.
-      
-      XML:
-      ${xmlContent}`;
-
-      const response = await fetch(`/api/gemini`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                company: { type: "STRING", description: "Nome da empresa remetente" },
-                nf_number: { type: "STRING", description: "Número da NF (somente o número, sem zeros a esquerda)" },
-                delivery_location: { type: "STRING", description: "Nome da empresa recebedora ou destinatária" },
-                shipping_date: { type: "STRING", description: "Data no formato AAAA-MM-DD" },
-              },
-              required: ['company', 'nf_number', 'delivery_location', 'shipping_date']
-            }
-          }
-        })
-      });
-
-      if (!response.ok) {
-         const errorData = await response.json().catch(() => ({}));
-         throw new Error(errorData.error?.message || `Erro na API: ${response.status}`);
-      }
-
-      const responseJson = await response.json();
-      const responseText = responseJson.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!responseText) throw new Error("IA não retornou dados.");
-
-      return JSON.parse(responseText);
+      const parsedData = parseFiscalXml(xmlContent);
+      return {
+        company: parsedData.company || '',
+        nf_number: parsedData.nfe ? parsedData.nfe.replace(/^0+/, '') : '',
+        delivery_location: parsedData.delivery_location || '',
+        shipping_date: parsedData.date || ''
+      };
   };
 
   const handleXmlUpload = useCallback(async (file: File) => {
@@ -216,8 +155,7 @@ export const FiscalNotesView: React.FC = () => {
       const xmlContent = await file.text();
       const parsedData = await extractDataFromXml(xmlContent);
 
-      // Limpar zeros à esquerda se houver
-      const cleanNfNumber = parsedData.nf_number ? parsedData.nf_number.replace(/^0+/, '') : '';
+      const cleanNfNumber = parsedData.nf_number;
 
       setNewNote(prev => ({
         ...prev,
@@ -230,18 +168,8 @@ export const FiscalNotesView: React.FC = () => {
       alert('Dados do XML preenchidos com sucesso!');
 
     } catch (error: any) {
-      console.error("Erro ao processar XML com IA:", error);
-      let errorMessage = "Ocorreu um erro ao processar o arquivo XML.";
-      
-      if (error.message?.includes('Configuração da IA ausente')) {
-        errorMessage = "A chave da API do Gemini não foi encontrada. Por favor, configure-a no ambiente.";
-      } else if (error.message?.includes('429')) {
-         errorMessage = "Limite de uso da IA excedido. Aguarde alguns instantes e tente novamente.";
-      } else if (error.message?.includes('403')) {
-         errorMessage = "Erro de permissão (403). A chave da API pode estar incorreta ou inválida no ambiente de produção.";
-      }
-      
-      alert(errorMessage);
+      console.error("Erro ao processar XML localmente:", error);
+      alert("Ocorreu um erro ao processar o arquivo XML localmente.");
     } finally {
       setIsProcessingXml(false);
     }

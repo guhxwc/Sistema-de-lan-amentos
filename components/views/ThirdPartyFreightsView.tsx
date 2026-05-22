@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { ThirdPartyFreight } from '../../types';
 import { supabase, getDistinctValues, saveAutocompleteValue, getSavedAutocompleteValues } from '../../lib/supabaseClient';
+import { parseFiscalXml } from '../../lib/xmlParser';
 import { ThirdPartySummaryCards } from '../thirdPartyFreights/ThirdPartySummaryCards';
 import { ThirdPartyFreightForm } from '../thirdPartyFreights/ThirdPartyFreightForm';
 import { ThirdPartyFreightsTable } from '../thirdPartyFreights/ThirdPartyFreightsTable';
@@ -229,55 +230,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
     setIsProcessingXml(true);
     try {
       const xmlContent = await file.text();
-      
-      const prompt = `Você é um assistente de logística. Analise este XML de transporte (CT-e ou MDF-e) e extraia os dados para cadastro de frete terceiro.
-      
-      Procure especificamente por:
-      - Motorista: tags como <xNome> dentro de <moto> ou <prop>.
-      - Placa: tags como <placa> dentro de <veic> ou <veicTracao>.
-      - Origem: Município de início (<xMunIni>, <xMun> do remetente).
-      - Destino: Município de fim (<xMunFim>, <xMun> do destinatário).
-
-      Retorne um JSON.
-      XML:
-      ${xmlContent}`;
-
-      const response = await fetch(`/api/gemini`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                driver: { type: "STRING", description: "Nome do motorista" },
-                license_plate: { type: "STRING", description: "Placa do veículo" },
-                origin: { type: "STRING", description: "Cidade de origem" },
-                destination: { type: "STRING", description: "Cidade de destino" },
-              },
-              required: ['driver', 'license_plate', 'origin', 'destination']
-            }
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `Erro na API: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!responseText) {
-        throw new Error("A IA não retornou texto válido.");
-      }
-
-      const parsedData = JSON.parse(responseText);
+      const parsedData = parseFiscalXml(xmlContent);
 
       setNewFreight(prev => ({
         ...prev,
@@ -291,25 +244,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
 
     } catch (error: any) {
       console.error("Erro ao processar XML:", error);
-      
-      let errorMessage = "Erro ao processar XML.";
-      
-      // Recupera a chave usada para debug na mensagem de erro (apenas prefixo)
-      let currentKey = '';
-      
-      const keyDebug = currentKey ? `(Key: ${currentKey.substring(0, 4)}...)` : '(Key: Vazia)';
-
-      if (error.message?.includes('Configuração da IA ausente') || error.message?.includes('Chave de API vazia')) {
-        errorMessage = `A chave da API do Gemini não foi encontrada no ambiente publicado. ${keyDebug}`;
-      } else if (error.message?.includes('429') || error.status === 429) {
-         errorMessage = "Limite de uso da IA excedido (Erro 429). Tente novamente em instantes.";
-      } else if (error.message?.includes('403') || error.status === 403) {
-         errorMessage = `Erro de permissão (403). A chave pode estar inválida ou não autorizada para este domínio. ${keyDebug} Detalhe: ${error.message}`;
-      } else {
-         errorMessage += ` Detalhes: ${error.message}`;
-      }
-      
-      alert(errorMessage);
+      alert("Erro ao processar XML localmente.");
     } finally {
       setIsProcessingXml(false);
     }
