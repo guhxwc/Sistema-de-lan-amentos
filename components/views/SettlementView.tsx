@@ -138,7 +138,19 @@ export const SettlementView: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setCurrentSettlement(prev => ({ ...prev, [name]: value }));
+    setCurrentSettlement(prev => {
+        const nextState = { ...prev, [name]: value };
+        
+        // If driver name changes, try to find their phone number from history
+        if (name === 'driver') {
+            const driverHistory = history.find(s => s.driver.trim().toUpperCase() === value.trim().toUpperCase() && s.driver_phone);
+            if (driverHistory) {
+                nextState.driver_phone = driverHistory.driver_phone;
+            }
+        }
+        
+        return nextState;
+    });
   };
 
   const setCommissions = (commissions: SettlementItem[]) => {
