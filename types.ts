@@ -61,6 +61,7 @@ export interface SettlementItem {
 export interface Settlement {
   id: string;
   driver: string;
+  driver_phone?: string;
   date: string;
   observations: string;
   commissions: SettlementItem[];
