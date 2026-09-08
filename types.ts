@@ -1,33 +1,32 @@
-
 export interface Freight {
   id: string;
   origin: string;
   destination: string;
-  value: number | '';
+  value: number | "";
 }
 
 export interface Expense {
   id: string;
   description: string;
-  value: number | '';
+  value: number | "";
 }
 
 export interface Refueling {
   id: string;
   date: string;
   location: string;
-  odometer: number | '';
-  liters: number | '';
-  value: number | '';
+  odometer: number | "";
+  liters: number | "";
+  value: number | "";
 }
 
 export interface Maintenance {
   id: string;
   type: string; // ex: Troca de Óleo, Filtro de Ar
   date: string;
-  current_km: number | '';
-  next_km: number | ''; // Próxima troca
-  value: number | '';
+  current_km: number | "";
+  next_km: number | ""; // Próxima troca
+  value: number | "";
   observations?: string;
 }
 
@@ -37,8 +36,8 @@ export interface Trip {
   license_plate: string;
   departure_date: string;
   arrival_date: string;
-  initial_km: number | '';
-  final_km: number | '';
+  initial_km: number | "";
+  final_km: number | "";
   freights: Freight[];
   expenses: Expense[];
   refuelings: Refueling[];
@@ -52,10 +51,10 @@ export interface SettlementItem {
   description: string;
   origin?: string;
   destination?: string;
-  value: number | '';
+  value: number | "";
   // Novos campos para cálculo de comissão
-  freightValue?: number | '';
-  percentage?: number | '';
+  freightValue?: number | "";
+  percentage?: number | "";
 }
 
 export interface Settlement {
@@ -82,10 +81,11 @@ export interface ReceivableFreight {
   destination: string;
   uf_origin?: string;
   uf_destination?: string;
-  toll_value?: number | '';
+  toll_value?: number | "";
   cte: string;
-  total_value: number | '';
-  paid_value: number | '';
+  total_value: number | "";
+  cargo_value?: number | ""; // New field
+  paid_value: number | "";
   row_color: string;
   created_at?: string;
 }
@@ -115,7 +115,7 @@ export interface FiscalNote {
   company: string;
   shipping_date: string;
   nf_number: string;
-  status: 'Pendente' | 'Entregue';
+  status: "Pendente" | "Entregue";
   delivery_location: string;
   client_delivered?: boolean;
   created_at?: string;
@@ -128,11 +128,11 @@ export interface ThirdPartyFreight {
   date: string;
   origin: string;
   destination: string;
-  company_freight_value: number | '';
-  paid_freight_value: number | '';
-  toll_value: number | '';
-  advance_payment: number | '';
-  status: 'Pendente' | 'Pago' | 'Parcial';
+  company_freight_value: number | "";
+  paid_freight_value: number | "";
+  toll_value: number | "";
+  advance_payment: number | "";
+  status: "Pendente" | "Pago" | "Parcial";
   created_at?: string;
 }
 
