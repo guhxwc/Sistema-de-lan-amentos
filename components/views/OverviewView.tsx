@@ -34,6 +34,7 @@ interface KpiCardProps {
   accent: string; // tailwind classes for icon bg/text
   subtitle?: string;
   emphasis?: boolean;
+  marginPercent?: number | null;
 }
 
 const KpiCard: React.FC<KpiCardProps> = ({
@@ -43,6 +44,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
   accent,
   subtitle,
   emphasis,
+  marginPercent,
 }) => (
   <Card
     className={
@@ -50,10 +52,26 @@ const KpiCard: React.FC<KpiCardProps> = ({
     }
   >
     <CardContent className="flex items-start justify-between">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">
-          {title}
-        </p>
+      <div className="flex-1 min-w-0 mr-2">
+        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            {title}
+          </p>
+          {marginPercent !== undefined && marginPercent !== null && (
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                marginPercent >= 0
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200/70"
+                  : "bg-red-50 text-red-700 border border-red-200/70"
+              }`}
+              title="Margem de Lucro (% sobre faturamento)"
+            >
+              {marginPercent >= 0
+                ? `+${marginPercent.toFixed(1)}%`
+                : `${marginPercent.toFixed(1)}%`}
+            </span>
+          )}
+        </div>
         <p
           className={`font-extrabold ${emphasis ? "text-3xl" : "text-2xl"} ${value >= 0 ? "text-slate-800" : "text-red-600"}`}
         >
@@ -61,7 +79,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
         </p>
         {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
       </div>
-      <div className={`p-3 rounded-xl ${accent}`}>{icon}</div>
+      <div className={`p-3 rounded-xl shrink-0 ${accent}`}>{icon}</div>
     </CardContent>
   </Card>
 );
@@ -87,8 +105,12 @@ export const OverviewView: React.FC = () => {
   const [thirdParty, setThirdParty] = useState<ThirdPartyFreight[]>([]);
   const [receivables, setReceivables] = useState<ReceivableFreight[]>([]);
 
-  const [selectedMonth, setSelectedMonth] = useState("Todos");
-  const [selectedYear, setSelectedYear] = useState("Todos");
+  // Padrão: Abre sempre filtrando no mês e ano atuais
+  const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
+  const currentYear = String(new Date().getFullYear());
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -129,7 +151,8 @@ export const OverviewView: React.FC = () => {
   }, [fetchAll]);
 
   const availableYears = useMemo(() => {
-    const years = new Set<string>();
+    const curYear = String(new Date().getFullYear());
+    const years = new Set<string>([curYear]);
     trips.forEach(
       (t) => t.departure_date && years.add(t.departure_date.substring(0, 4)),
     );
@@ -233,6 +256,33 @@ export const OverviewView: React.FC = () => {
   const totalConsolidado =
     frotaData.net + terceirosData.net + receivablesData.net;
 
+  // Cálculos de Margem de Lucro (% sobre faturamento)
+  const totalRevenue =
+    frotaData.freightsTotal +
+    terceirosData.companyTotal +
+    receivablesData.grossTotal;
+
+  const frotaMargin =
+    frotaData.freightsTotal > 0
+      ? (frotaData.net / frotaData.freightsTotal) * 100
+      : null;
+
+  const terceirosMargin =
+    terceirosData.companyTotal > 0
+      ? (terceirosData.net / terceirosData.companyTotal) * 100
+      : null;
+
+  const receivablesMargin =
+    receivablesData.grossTotal > 0
+      ? (receivablesData.net / receivablesData.grossTotal) * 100
+      : null;
+
+  const consolidadoMargin =
+    totalRevenue > 0 ? (totalConsolidado / totalRevenue) * 100 : null;
+
+  const isCurrentMonthSelected =
+    selectedMonth === currentMonth && selectedYear === currentYear;
+
   const seguroConfig = getSeguroConfig();
 
   return (
@@ -240,8 +290,28 @@ export const OverviewView: React.FC = () => {
       <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200 sticky top-0 z-30">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3 h-16">
-            <h1 className="text-xl font-bold text-slate-800">Visão Geral</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-slate-800">Visão Geral</h1>
+              {isCurrentMonthSelected && (
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                  Mês Atual
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
+              {!isCurrentMonthSelected && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMonth(currentMonth);
+                    setSelectedYear(currentYear);
+                  }}
+                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg border border-sky-200 transition-colors"
+                  title="Voltar para o mês atual"
+                >
+                  Ir para Mês Atual
+                </button>
+              )}
               <div className="w-36">
                 <Select
                   label=""
@@ -311,6 +381,7 @@ export const OverviewView: React.FC = () => {
               <KpiCard
                 title="Líquido Frota Própria"
                 value={frotaData.net}
+                marginPercent={frotaMargin}
                 accent="bg-sky-100 text-sky-600"
                 subtitle={`${trips.filter((t) => inPeriod(t.departure_date)).length} viagem(ns)`}
                 icon={
@@ -343,6 +414,7 @@ export const OverviewView: React.FC = () => {
               <KpiCard
                 title="Líquido Terceiros"
                 value={terceirosData.net}
+                marginPercent={terceirosMargin}
                 accent="bg-amber-100 text-amber-600"
                 subtitle={`${thirdParty.filter((f) => inPeriod(f.date)).length} frete(s)`}
                 icon={
@@ -365,6 +437,7 @@ export const OverviewView: React.FC = () => {
               <KpiCard
                 title="Líquido Fretes a Receber"
                 value={receivablesData.net}
+                marginPercent={receivablesMargin}
                 accent="bg-emerald-100 text-emerald-600"
                 subtitle={`${receivablesData.breakdown.length} frete(s) · após ICMS + seguro + pedágio`}
                 icon={
@@ -387,6 +460,7 @@ export const OverviewView: React.FC = () => {
               <KpiCard
                 title="Total Consolidado"
                 value={totalConsolidado}
+                marginPercent={consolidadoMargin}
                 accent="bg-slate-800 text-white"
                 subtitle="Frota + Terceiros + A Receber"
                 emphasis
@@ -412,29 +486,47 @@ export const OverviewView: React.FC = () => {
             {/* Detalhamento Frota */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-sky-100 rounded-lg text-sky-600">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h8a1 1 0 001-1z"
-                      />
-                    </svg>
+                <div className="flex items-center justify-between flex-wrap gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-sky-100 rounded-lg text-sky-600">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h8a1 1 0 001-1z"
+                        />
+                      </svg>
+                    </div>
+                    <span className="font-semibold text-slate-800">
+                      Frota Própria (Viagens)
+                    </span>
+                    {frotaMargin !== null && (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                          frotaMargin >= 0
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                            : "bg-red-50 text-red-700 border border-red-200/80"
+                        }`}
+                      >
+                        {frotaMargin >= 0
+                          ? `+${frotaMargin.toFixed(1)}%`
+                          : `${frotaMargin.toFixed(1)}%`}{" "}
+                        lucro
+                      </span>
+                    )}
                   </div>
-                  Frota Própria (Viagens)
                 </div>
               </CardHeader>
               <CardContent>
@@ -472,24 +564,42 @@ export const OverviewView: React.FC = () => {
             {/* Detalhamento Terceiros */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.084-1.284-.24-1.88M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.084-1.284.24-1.88"
-                      />
-                    </svg>
+                <div className="flex items-center justify-between flex-wrap gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.084-1.284-.24-1.88M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.084-1.284.24-1.88"
+                        />
+                      </svg>
+                    </div>
+                    <span className="font-semibold text-slate-800">
+                      Fretes de Terceiros
+                    </span>
+                    {terceirosMargin !== null && (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                          terceirosMargin >= 0
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                            : "bg-red-50 text-red-700 border border-red-200/80"
+                        }`}
+                      >
+                        {terceirosMargin >= 0
+                          ? `+${terceirosMargin.toFixed(1)}%`
+                          : `${terceirosMargin.toFixed(1)}%`}{" "}
+                        lucro
+                      </span>
+                    )}
                   </div>
-                  Fretes de Terceiros
                 </div>
               </CardHeader>
               <CardContent>
@@ -524,24 +634,42 @@ export const OverviewView: React.FC = () => {
             {/* Detalhamento Fretes a Receber: ICMS + Seguro */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
+                <div className="flex items-center justify-between flex-wrap gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <span className="font-semibold text-slate-800">
+                      Fretes a Receber — ICMS e Seguro RCTR-C
+                    </span>
+                    {receivablesMargin !== null && (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                          receivablesMargin >= 0
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+                            : "bg-red-50 text-red-700 border border-red-200/80"
+                        }`}
+                      >
+                        {receivablesMargin >= 0
+                          ? `+${receivablesMargin.toFixed(1)}%`
+                          : `${receivablesMargin.toFixed(1)}%`}{" "}
+                        lucro
+                      </span>
+                    )}
                   </div>
-                  Fretes a Receber — ICMS e Seguro RCTR-C
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -643,6 +771,16 @@ export const OverviewView: React.FC = () => {
                             className={`px-3 py-2 text-right font-bold ${result.netValue >= 0 ? "text-emerald-600" : "text-red-600"}`}
                           >
                             {formatCurrency(result.netValue)}
+                            {Number(freight.total_value) > 0 && (
+                              <span className="block text-[11px] font-semibold text-slate-400">
+                                {(
+                                  (result.netValue /
+                                    Number(freight.total_value)) *
+                                  100
+                                ).toFixed(1)}
+                                % margem
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

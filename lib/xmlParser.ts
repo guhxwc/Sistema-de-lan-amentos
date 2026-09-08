@@ -10,6 +10,7 @@ export interface ParsedXmlData {
   uf_origin?: string;
   uf_destination?: string;
   toll_value?: number;
+  cargo_value?: number;
   total_value?: number;
   weight?: number;
   driver?: string;
