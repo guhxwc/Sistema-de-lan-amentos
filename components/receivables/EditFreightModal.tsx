@@ -4,7 +4,9 @@ import type { ReceivableFreight } from '../../types';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
 import { DatalistInput } from '../ui/DatalistInput';
+import { UF_LIST } from '../../lib/fiscalCalculations';
 
 interface EditFreightModalProps {
   freight: ReceivableFreight;
@@ -18,8 +20,8 @@ interface EditFreightModalProps {
 export const EditFreightModal: React.FC<EditFreightModalProps> = ({ freight, onSave, onClose, savedClients, savedOrigins, savedDestinations }) => {
   const [editedFreight, setEditedFreight] = useState(freight);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target as HTMLInputElement;
     setEditedFreight(prev => ({
       ...prev,
       [name]: type === 'number' ? (value === '' ? '' : parseFloat(value)) : value,
@@ -48,10 +50,19 @@ export const EditFreightModal: React.FC<EditFreightModalProps> = ({ freight, onS
               <Input label="Data Entrega" name="delivery_date" type="date" value={editedFreight.delivery_date || ''} onChange={handleChange} />
               <DatalistInput label="Cliente" name="client" value={editedFreight.client} onChange={handleChange} options={savedClients} id="edit-client-list" />
               <DatalistInput label="Origem" name="origin" value={editedFreight.origin} onChange={handleChange} options={savedOrigins} id="edit-origin-list"/>
+              <Select label="UF Origem" name="uf_origin" value={editedFreight.uf_origin || ''} onChange={handleChange}>
+                <option value="">--</option>
+                {UF_LIST.map(uf => <option key={uf.value} value={uf.value}>{uf.value}</option>)}
+              </Select>
               <DatalistInput label="Destino" name="destination" value={editedFreight.destination} onChange={handleChange} options={savedDestinations} id="edit-destination-list" />
+              <Select label="UF Destino" name="uf_destination" value={editedFreight.uf_destination || ''} onChange={handleChange}>
+                <option value="">--</option>
+                {UF_LIST.map(uf => <option key={uf.value} value={uf.value}>{uf.value}</option>)}
+              </Select>
               <Input label="CT-e" name="cte" value={editedFreight.cte} onChange={handleChange} />
               <Input label="Valor Total (R$)" name="total_value" currency value={editedFreight.total_value} onChange={handleChange} />
               <Input label="Pago (R$)" name="paid_value" currency value={editedFreight.paid_value} onChange={handleChange} />
+              <Input label="Pedágio (R$)" name="toll_value" currency value={editedFreight.toll_value ?? ''} onChange={handleChange} />
               <Input label="Cor da Linha" name="row_color" type="color" value={editedFreight.row_color} onChange={handleChange} className="p-1 h-10"/>
             </div>
           </CardContent>

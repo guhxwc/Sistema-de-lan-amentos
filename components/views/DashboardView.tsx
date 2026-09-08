@@ -12,7 +12,7 @@ interface TableStatus {
   error?: string;
 }
 
-const tableNames = ['trips', 'settlements', 'receivable_freights', 'fiscal_notes', 'third_party_freights', 'saved_entries', 'inbox_ctes'];
+const tableNames = ['trips', 'settlements', 'receivable_freights', 'fiscal_notes', 'third_party_freights', 'saved_entries', 'inbox_ctes', 'icms_uf_rates', 'seguro_rctrc_taxas', 'seguro_config'];
 
 const sqlSchema = `-- Habilita a extensão para usar UUIDs
 create extension if not exists "uuid-ossp";
@@ -120,8 +120,43 @@ create table if not exists saved_entries (
   unique (category, value)
 );
 
+-- Campos extras em receivable_freights: UF de origem/destino e pedágio (usados na Visão Geral)
+alter table receivable_freights add column if not exists uf_origin text;
+alter table receivable_freights add column if not exists uf_destination text;
+alter table receivable_freights add column if not exists toll_value numeric default 0;
+
+-- Tabela de alíquotas internas de ICMS por UF (Visão Geral)
+create table if not exists icms_uf_rates (
+  uf text primary key,
+  internal_rate numeric not null,
+  is_reduced_origin boolean not null default false,
+  updated_at timestamp with time zone default now()
+);
+
+-- Tabela de taxas do seguro obrigatório RCTR-C (origem x destino) — 27x27 UFs
+create table if not exists seguro_rctrc_taxas (
+  origin_uf text not null,
+  destination_uf text not null,
+  taxa_base_percent numeric not null,
+  primary key (origin_uf, destination_uf)
+);
+
+-- Configuração do seguro (desconto RCTR-C, RC-DC, franquia)
+create table if not exists seguro_config (
+  id int primary key default 1,
+  desconto_rctrc_percent numeric not null default 60,
+  rc_dc_percent numeric not null default 0.015,
+  franquia_percent numeric not null default 10,
+  franquia_minima numeric not null default 1000,
+  updated_at timestamp with time zone default now(),
+  constraint single_row check (id = 1)
+);
+
 -- RLS
 alter table trips enable row level security;
+alter table icms_uf_rates enable row level security;
+alter table seguro_rctrc_taxas enable row level security;
+alter table seguro_config enable row level security;
 alter table settlements enable row level security;
 alter table receivable_freights enable row level security;
 alter table fiscal_notes enable row level security;
@@ -171,10 +206,10 @@ serve(async (req) => {
 
     // 4. Extração Simples (Regex) para dados vitais 
     // (Idealmente use um parser XML completo, mas Regex é rápido para Edge Functions simples)
-    const cteMatch = xmlContent.match(/<nCT>(.*?)<\/nCT>/);
-    const valMatch = xmlContent.match(/<vTPrest>(.*?)<\/vTPrest>/);
-    const remMatch = xmlContent.match(/<rem>.*?<xNome>(.*?)<\/xNome>.*?<\/rem>/s); // Remetente
-    const destMatch = xmlContent.match(/<dest>.*?<xNome>(.*?)<\/xNome>.*?<\/dest>/s); // Destinatário (Cliente)
+    const cteMatch = xmlContent.match(/<nCT>(.*?)<\\/nCT>/);
+    const valMatch = xmlContent.match(/<vTPrest>(.*?)<\\/vTPrest>/);
+    const remMatch = xmlContent.match(/<rem>.*?<xNome>(.*?)<\\/xNome>.*?<\\/rem>/s); // Remetente
+    const destMatch = xmlContent.match(/<dest>.*?<xNome>(.*?)<\\/xNome>.*?<\\/dest>/s); // Destinatário (Cliente)
 
     // 5. Salva no Banco de Dados
     const { error } = await supabase.from('inbox_ctes').insert({

@@ -7,6 +7,9 @@ export interface ParsedXmlData {
   client?: string;
   origin?: string;
   destination?: string;
+  uf_origin?: string;
+  uf_destination?: string;
+  toll_value?: number;
   total_value?: number;
   weight?: number;
   driver?: string;
@@ -81,6 +84,23 @@ export function parseFiscalXml(xmlString: string): ParsedXmlData {
     
     data.origin = getTagFromPath(['rem', 'xMun']) || getTagContent('xMunIni') || '';
     data.destination = getTagFromPath(['dest', 'xMun']) || getTagContent('xMunFim') || '';
+
+    // UF de início/fim da prestação (usadas no cálculo de ICMS e seguro RCTR-C)
+    data.uf_origin = (getTagContent('UFIni') || getTagFromPath(['rem', 'enderReme', 'UF']) || '').toUpperCase() || undefined;
+    data.uf_destination = (getTagContent('UFFim') || getTagFromPath(['dest', 'enderDest', 'UF']) || '').toUpperCase() || undefined;
+
+    // Pedágio: soma os componentes de vPrest cujo nome contenha "PEDAGIO"
+    const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const compNodes = Array.from(doc.getElementsByTagName('Comp'));
+    let tollSum = 0;
+    compNodes.forEach(comp => {
+      const xNome = comp.getElementsByTagName('xNome')[0]?.textContent || '';
+      if (normalize(xNome).includes('PEDAGIO')) {
+        const vComp = parseFloat(comp.getElementsByTagName('vComp')[0]?.textContent || '0');
+        if (!isNaN(vComp)) tollSum += vComp;
+      }
+    });
+    if (tollSum > 0) data.toll_value = tollSum;
     
     // Resolve tomador (toma3 / toma4) - O cliente é o tomador do frete
     let tomadorName = '';

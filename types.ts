@@ -80,11 +80,34 @@ export interface ReceivableFreight {
   client: string;
   origin: string;
   destination: string;
+  uf_origin?: string;
+  uf_destination?: string;
+  toll_value?: number | '';
   cte: string;
   total_value: number | '';
   paid_value: number | '';
   row_color: string;
   created_at?: string;
+}
+
+export interface IcmsUfRate {
+  uf: string;
+  internal_rate: number;
+  is_reduced_origin: boolean;
+}
+
+export interface SeguroRctrcTaxa {
+  origin_uf: string;
+  destination_uf: string;
+  taxa_base_percent: number;
+}
+
+export interface SeguroConfig {
+  id: number;
+  desconto_rctrc_percent: number;
+  rc_dc_percent: number;
+  franquia_percent: number;
+  franquia_minima: number;
 }
 
 export interface FiscalNote {

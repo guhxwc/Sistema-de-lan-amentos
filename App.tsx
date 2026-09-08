@@ -8,11 +8,12 @@ import { FiscalNotesView } from './components/views/FiscalNotesView';
 import { ThirdPartyFreightsView } from './components/views/ThirdPartyFreightsView';
 import { DashboardView } from './components/views/DashboardView';
 import { FreightProrationView } from './components/views/FreightProrationView';
+import { OverviewView } from './components/views/OverviewView';
 
-export type View = 'trips' | 'settlements' | 'receivables' | 'fiscalNotes' | 'thirdPartyFreights' | 'dashboard' | 'proration';
+export type View = 'trips' | 'settlements' | 'receivables' | 'fiscalNotes' | 'thirdPartyFreights' | 'dashboard' | 'proration' | 'overview';
 
 function App() {
-  const [activeView, setActiveView] = useState<View>('trips');
+  const [activeView, setActiveView] = useState<View>('overview');
 
   return (
     <div className="flex h-screen bg-slate-200 overflow-hidden">
@@ -20,6 +21,7 @@ function App() {
       <div className="flex-1 flex flex-col overflow-hidden relative">
         
         <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+          {activeView === 'overview' && <OverviewView />}
           {activeView === 'trips' && <TripManagementView />}
           {activeView === 'settlements' && <SettlementView />}
           {activeView === 'receivables' && <ReceivablesView />}

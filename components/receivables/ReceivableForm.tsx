@@ -4,7 +4,9 @@ import type { ReceivableFreight } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
 import { DatalistInput } from '../ui/DatalistInput';
+import { UF_LIST } from '../../lib/fiscalCalculations';
 
 interface ReceivableFormProps {
   newFreight: ReceivableFreight;
@@ -20,8 +22,8 @@ interface ReceivableFormProps {
 export const ReceivableForm: React.FC<ReceivableFormProps> = ({ newFreight, setNewFreight, onAddFreight, savedClients, savedOrigins, savedDestinations, onXmlUpload, isProcessingXml }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target as HTMLInputElement;
     setNewFreight(prev => ({
       ...prev,
       [name]: type === 'number' ? (value === '' ? '' : parseFloat(value)) : value,
@@ -49,10 +51,23 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({ newFreight, setN
           <div className="lg:col-span-1"><Input label="Data Entrega" name="delivery_date" type="date" value={newFreight.delivery_date || ''} onChange={handleChange} /></div>
           <div className="md:col-span-2 lg:col-span-2"><DatalistInput label="Cliente" name="client" value={newFreight.client} onChange={handleChange} options={savedClients} id="client-list" /></div>
           <div className="md:col-span-2 lg:col-span-1"><DatalistInput label="Origem" name="origin" value={newFreight.origin} onChange={handleChange} options={savedOrigins} id="origin-list"/></div>
+          <div className="lg:col-span-1">
+            <Select label="UF Origem" name="uf_origin" value={newFreight.uf_origin || ''} onChange={handleChange}>
+              <option value="">--</option>
+              {UF_LIST.map(uf => <option key={uf.value} value={uf.value}>{uf.value}</option>)}
+            </Select>
+          </div>
           <div className="md:col-span-2 lg:col-span-1"><DatalistInput label="Destino" name="destination" value={newFreight.destination} onChange={handleChange} options={savedDestinations} id="destination-list" /></div>
+          <div className="lg:col-span-1">
+            <Select label="UF Destino" name="uf_destination" value={newFreight.uf_destination || ''} onChange={handleChange}>
+              <option value="">--</option>
+              {UF_LIST.map(uf => <option key={uf.value} value={uf.value}>{uf.value}</option>)}
+            </Select>
+          </div>
           <div className="md:col-span-1"><Input label="CT-e" name="cte" value={newFreight.cte} onChange={handleChange} /></div>
           <div className="md:col-span-1"><Input label="Valor Total (R$)" name="total_value" currency value={newFreight.total_value} onChange={handleChange} /></div>
           <div className="md:col-span-1"><Input label="Pago (R$)" name="paid_value" currency value={newFreight.paid_value} onChange={handleChange} /></div>
+          <div className="md:col-span-1"><Input label="Pedágio (R$)" name="toll_value" currency value={newFreight.toll_value ?? ''} onChange={handleChange} /></div>
           <div className="md:col-span-1"><Input label="Cor da Linha" name="row_color" type="color" value={newFreight.row_color} onChange={handleChange} className="p-1 h-10"/></div>
           <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 gap-2">
             <Button

@@ -19,6 +19,9 @@ const getInitialFreight = (): ReceivableFreight => ({
   client: '',
   origin: '',
   destination: '',
+  uf_origin: '',
+  uf_destination: '',
+  toll_value: '',
   cte: '',
   total_value: '',
   paid_value: '',
@@ -208,6 +211,9 @@ export const ReceivablesView: React.FC = () => {
         client: parsedData.client || parsedData.company || '',
         origin: parsedData.origin || '',
         destination: parsedData.destination || '',
+        uf_origin: parsedData.uf_origin || prev.uf_origin,
+        uf_destination: parsedData.uf_destination || prev.uf_destination,
+        toll_value: parsedData.toll_value ?? prev.toll_value,
         total_value: parsedData.total_value || 0,
       }));
 
@@ -260,6 +266,9 @@ export const ReceivablesView: React.FC = () => {
         date: newFreight.date || null,
         due_date: newFreight.due_date || null,
         delivery_date: newFreight.delivery_date || null,
+        uf_origin: newFreight.uf_origin ? newFreight.uf_origin.toUpperCase() : null,
+        uf_destination: newFreight.uf_destination ? newFreight.uf_destination.toUpperCase() : null,
+        toll_value: (newFreight.toll_value as any) === '' ? 0 : newFreight.toll_value,
         total_value: (newFreight.total_value as any) === '' ? 0 : newFreight.total_value,
         paid_value: (newFreight.paid_value as any) === '' ? 0 : newFreight.paid_value,
     };
@@ -298,6 +307,9 @@ export const ReceivablesView: React.FC = () => {
         date: updatedFreight.date || null,
         due_date: updatedFreight.due_date || null,
         delivery_date: updatedFreight.delivery_date || null,
+        uf_origin: updatedFreight.uf_origin ? updatedFreight.uf_origin.toUpperCase() : null,
+        uf_destination: updatedFreight.uf_destination ? updatedFreight.uf_destination.toUpperCase() : null,
+        toll_value: (updatedFreight.toll_value as any) === '' ? 0 : updatedFreight.toll_value,
         total_value: (updatedFreight.total_value as any) === '' ? 0 : updatedFreight.total_value,
         paid_value: (updatedFreight.paid_value as any) === '' ? 0 : updatedFreight.paid_value,
     };
