@@ -1,14 +1,15 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import type { ThirdPartyFreight } from '../../types';
+import type { ThirdPartyFreight, ReceivableFreight } from '../../types';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { DatalistInput } from '../ui/DatalistInput';
+import { ReceivableFreightLinkPicker } from './ReceivableFreightLinkPicker';
+import { supabase } from '../../lib/supabaseClient';
 
 interface EditThirdPartyFreightModalProps {
   freight: ThirdPartyFreight;
-  onSave: (freight: ThirdPartyFreight) => void;
+  onSave: (freight: ThirdPartyFreight, linkedFreights: ReceivableFreight[]) => void;
   onClose: () => void;
   savedDrivers: string[];
   savedLicensePlates: string[];
@@ -19,6 +20,29 @@ interface EditThirdPartyFreightModalProps {
 export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProps> = ({ freight, onSave, onClose, savedDrivers, savedLicensePlates, savedOrigins, savedDestinations }) => {
   const [editedFreight, setEditedFreight] = useState(freight);
   const [advancePercentage, setAdvancePercentage] = useState('');
+  const [linkedFreights, setLinkedFreights] = useState<ReceivableFreight[]>([]);
+  const [loadingLinks, setLoadingLinks] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      setLoadingLinks(true);
+      const { data: links } = await supabase
+        .from('third_party_freight_ctes')
+        .select('receivable_freight_id')
+        .eq('third_party_freight_id', freight.id);
+      const ids = (links || []).map((l) => l.receivable_freight_id).filter(Boolean) as string[];
+      if (ids.length > 0) {
+        const { data: freights } = await supabase
+          .from('receivable_freights')
+          .select('*')
+          .in('id', ids);
+        if (active) setLinkedFreights(freights || []);
+      }
+      if (active) setLoadingLinks(false);
+    })();
+    return () => { active = false; };
+  }, [freight.id]);
 
   // Auto-calculate advance payment when percentage or paid freight changes
   useEffect(() => {
@@ -51,7 +75,7 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(editedFreight);
+    onSave(editedFreight, linkedFreights);
   };
   
   const calculatedStatus = useMemo(() => {
@@ -86,6 +110,13 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
                 <Input label="Frete Empresa (R$)" name="company_freight_value" currency value={editedFreight.company_freight_value} onChange={handleChange} />
                 <Input label="Frete Pago (R$)" name="paid_freight_value" currency value={editedFreight.paid_freight_value} onChange={handleChange} />
                 <Input label="Pedágio (R$)" name="toll_value" currency value={editedFreight.toll_value} onChange={handleChange} />
+                <div className="lg:col-span-3">
+                  {loadingLinks ? (
+                    <p className="text-xs text-slate-400">Carregando vínculos...</p>
+                  ) : (
+                    <ReceivableFreightLinkPicker selected={linkedFreights} onChange={setLinkedFreights} />
+                  )}
+                </div>
                 
                 <div className="flex gap-2">
                      <div className="w-1/3">

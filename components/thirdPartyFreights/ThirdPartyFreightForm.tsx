@@ -1,10 +1,10 @@
-
 import React, { useRef, useState, useEffect } from 'react';
-import type { ThirdPartyFreight } from '../../types';
+import type { ReceivableFreight, ThirdPartyFreight } from '../../types';
 import { Card, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { DatalistInput } from '../ui/DatalistInput';
+import { ReceivableFreightLinkPicker } from './ReceivableFreightLinkPicker';
 
 interface ThirdPartyFreightFormProps {
   newFreight: ThirdPartyFreight;
@@ -16,6 +16,8 @@ interface ThirdPartyFreightFormProps {
   savedDestinations: string[];
   onXmlUpload: (file: File) => void;
   isProcessingXml: boolean;
+  linkedFreights: ReceivableFreight[];
+  setLinkedFreights: React.Dispatch<React.SetStateAction<ReceivableFreight[]>>;
 }
 
 export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({ 
@@ -27,7 +29,9 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
     savedOrigins, 
     savedDestinations,
     onXmlUpload,
-    isProcessingXml
+    isProcessingXml,
+    linkedFreights,
+    setLinkedFreights,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [advancePercentage, setAdvancePercentage] = useState('');
@@ -86,6 +90,9 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
           <Input label="Frete Empresa (R$)" name="company_freight_value" currency value={newFreight.company_freight_value} onChange={handleChange} />
           <Input label="Frete Pago (R$)" name="paid_freight_value" currency value={newFreight.paid_freight_value} onChange={handleChange} />
           <Input label="Pedágio (R$)" name="toll_value" currency value={newFreight.toll_value} onChange={handleChange} />
+          <div className="md:col-span-3">
+            <ReceivableFreightLinkPicker selected={linkedFreights} onChange={setLinkedFreights} />
+          </div>
           
           <div className="flex gap-2">
              <div className="w-1/3">

@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import type { ThirdPartyFreight } from '../../types';
+import type { ThirdPartyFreight, ReceivableFreight } from '../../types';
 import { supabase, getDistinctValues, saveAutocompleteValue, getSavedAutocompleteValues } from '../../lib/supabaseClient';
 import { parseFiscalXml } from '../../lib/xmlParser';
 import { ThirdPartySummaryCards } from '../thirdPartyFreights/ThirdPartySummaryCards';
@@ -62,6 +61,7 @@ const getFromLocalStorage = (key: string): string[] => {
 export const ThirdPartyFreightsView: React.FC = () => {
   const [freights, setFreights] = useState<ThirdPartyFreight[]>([]);
   const [newFreight, setNewFreight] = useState(getInitialThirdPartyFreight());
+  const [linkedFreights, setLinkedFreights] = useState<ReceivableFreight[]>([]);
   
   // Ref para rastrear o motorista anterior e evitar loops ou overwrites indesejados
   const prevDriverRef = useRef<string>('');
@@ -282,8 +282,21 @@ export const ThirdPartyFreightsView: React.FC = () => {
           // Salvar dados para autocompletar futuro (Persistência)
           await saveSuggestions(freightToAdd);
 
+          // Vincula manualmente aos fretes a receber selecionados (sem CT-e/MDF-e)
+          if (linkedFreights.length > 0) {
+            const linkRows = linkedFreights.map((f) => ({
+              third_party_freight_id: freightToAdd.id,
+              cte_key: null,
+              cte_number: null,
+              receivable_freight_id: f.id,
+            }));
+            const { error: linkError } = await supabase.from('third_party_freight_ctes').insert(linkRows);
+            if (linkError) console.error('Erro ao vincular fretes a receber:', linkError);
+          }
+
           alert('Frete de terceiro adicionado com sucesso!');
           setNewFreight(getInitialThirdPartyFreight());
+          setLinkedFreights([]);
           // Resetamos o ref para que se adicionar o mesmo motorista novamente, a lógica funcione se necessário
           prevDriverRef.current = ''; 
           fetchFreights();
@@ -292,9 +305,9 @@ export const ThirdPartyFreightsView: React.FC = () => {
     } catch (error: any) {
       alert(`Erro de rede ao adicionar frete: ${error.message}`);
     }
-  }, [newFreight, fetchFreights, fetchAutocompleteData]);
+  }, [newFreight, linkedFreights, fetchFreights, fetchAutocompleteData]);
 
-  const handleUpdateFreight = useCallback(async (updatedFreight: ThirdPartyFreight) => {
+  const handleUpdateFreight = useCallback(async (updatedFreight: ThirdPartyFreight, linkedFreightsForUpdate: ReceivableFreight[]) => {
     const companyFreight = Number(updatedFreight.company_freight_value) || 0;
     const paidFreight = Number(updatedFreight.paid_freight_value) || 0;
     const tollValue = Number(updatedFreight.toll_value) || 0;
@@ -320,6 +333,20 @@ export const ThirdPartyFreightsView: React.FC = () => {
           alert(`Erro ao atualizar frete: ${error.message}`);
       } else {
           await saveSuggestions(freightWithCorrectStatus);
+
+          // Ressincroniza os vínculos com fretes a receber: remove os antigos e recria
+          // com a seleção atual do modal (cobre tanto vínculos manuais quanto os que vieram de MDF-e).
+          await supabase.from('third_party_freight_ctes').delete().eq('third_party_freight_id', freightWithCorrectStatus.id);
+          if (linkedFreightsForUpdate.length > 0) {
+            const linkRows = linkedFreightsForUpdate.map((f) => ({
+              third_party_freight_id: freightWithCorrectStatus.id,
+              cte_key: null,
+              cte_number: null,
+              receivable_freight_id: f.id,
+            }));
+            const { error: linkError } = await supabase.from('third_party_freight_ctes').insert(linkRows);
+            if (linkError) console.error('Erro ao ressincronizar vínculos:', linkError);
+          }
 
           alert('Frete atualizado com sucesso.');
           setEditingFreight(null);
@@ -524,6 +551,8 @@ export const ThirdPartyFreightsView: React.FC = () => {
                 savedDestinations={savedDestinations}
                 onXmlUpload={handleXmlUpload}
                 isProcessingXml={isProcessingXml}
+                linkedFreights={linkedFreights}
+                setLinkedFreights={setLinkedFreights}
             />
             
             <Card>
