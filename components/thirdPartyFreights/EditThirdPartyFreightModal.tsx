@@ -110,13 +110,6 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
                 <Input label="Frete Empresa (R$)" name="company_freight_value" currency value={editedFreight.company_freight_value} onChange={handleChange} />
                 <Input label="Frete Pago (R$)" name="paid_freight_value" currency value={editedFreight.paid_freight_value} onChange={handleChange} />
                 <Input label="Pedágio (R$)" name="toll_value" currency value={editedFreight.toll_value} onChange={handleChange} />
-                <div className="lg:col-span-3">
-                  {loadingLinks ? (
-                    <p className="text-xs text-slate-400">Carregando vínculos...</p>
-                  ) : (
-                    <ReceivableFreightLinkPicker selected={linkedFreights} onChange={setLinkedFreights} />
-                  )}
-                </div>
                 
                 <div className="flex gap-2">
                      <div className="w-1/3">
@@ -141,6 +134,14 @@ export const EditThirdPartyFreightModal: React.FC<EditThirdPartyFreightModalProp
                             {calculatedStatus}
                         </span>
                     </div>
+                </div>
+
+                <div className="lg:col-span-3">
+                  {loadingLinks ? (
+                    <p className="text-xs text-slate-400">Carregando vínculos...</p>
+                  ) : (
+                    <ReceivableFreightLinkPicker selected={linkedFreights} onChange={setLinkedFreights} />
+                  )}
                 </div>
             </div>
           </CardContent>

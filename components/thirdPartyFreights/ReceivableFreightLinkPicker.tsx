@@ -5,6 +5,7 @@ import type { ReceivableFreight } from "../../types";
 interface ReceivableFreightLinkPickerProps {
   selected: ReceivableFreight[];
   onChange: (freights: ReceivableFreight[]) => void;
+  onClose?: () => void;
 }
 
 const formatCurrency = (value: number) =>
@@ -13,6 +14,7 @@ const formatCurrency = (value: number) =>
 export const ReceivableFreightLinkPicker: React.FC<ReceivableFreightLinkPickerProps> = ({
   selected,
   onChange,
+  onClose,
 }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ReceivableFreight[]>([]);
@@ -62,10 +64,22 @@ export const ReceivableFreightLinkPicker: React.FC<ReceivableFreightLinkPickerPr
   };
 
   return (
-    <div className="w-full" ref={boxRef}>
-      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5 ml-1">
-        Vincular a Frete(s) a Receber (sem CT-e — busque pelo cliente)
-      </label>
+    <div className="w-full bg-slate-50/90 border border-slate-200 rounded-xl p-3.5 shadow-sm" ref={boxRef}>
+      <div className="flex items-center justify-between mb-1.5 px-0.5">
+        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+          Vincular a Frete(s) a Receber (busque pelo cliente, origem ou destino)
+        </label>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-slate-500 hover:text-slate-800 px-2 py-0.5 rounded hover:bg-slate-200/60 transition-colors"
+            title="Fechar busca de vínculo"
+          >
+            ✕ Fechar
+          </button>
+        )}
+      </div>
       <div className="relative">
         <input
           type="text"

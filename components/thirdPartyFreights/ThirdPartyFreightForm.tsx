@@ -35,6 +35,12 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [advancePercentage, setAdvancePercentage] = useState('');
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+
+  // Fecha o vinculador ao resetar o formulário
+  useEffect(() => {
+    setShowLinkPicker(false);
+  }, [newFreight.id]);
 
   // Auto-calculate advance payment when percentage or paid freight changes
   useEffect(() => {
@@ -90,9 +96,6 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
           <Input label="Frete Empresa (R$)" name="company_freight_value" currency value={newFreight.company_freight_value} onChange={handleChange} />
           <Input label="Frete Pago (R$)" name="paid_freight_value" currency value={newFreight.paid_freight_value} onChange={handleChange} />
           <Input label="Pedágio (R$)" name="toll_value" currency value={newFreight.toll_value} onChange={handleChange} />
-          <div className="md:col-span-3">
-            <ReceivableFreightLinkPicker selected={linkedFreights} onChange={setLinkedFreights} />
-          </div>
           
           <div className="flex gap-2">
              <div className="w-1/3">
@@ -109,8 +112,35 @@ export const ThirdPartyFreightForm: React.FC<ThirdPartyFreightFormProps> = ({
                 <Input label="Adiantamento (R$)" name="advance_payment" currency value={newFreight.advance_payment} onChange={handleChange} />
              </div>
           </div>
+
+          {showLinkPicker && (
+            <div className="md:col-span-3 pt-1 animate-in fade-in-0 duration-200">
+              <ReceivableFreightLinkPicker
+                selected={linkedFreights}
+                onChange={setLinkedFreights}
+                onClose={() => setShowLinkPicker(false)}
+              />
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap justify-end gap-3 mt-4">
+            <Button
+              type="button"
+              onClick={() => setShowLinkPicker(prev => !prev)}
+              variant={showLinkPicker ? "secondary" : "outline"}
+              className="w-full sm:w-auto flex items-center justify-center gap-2"
+              title="Vincular a frete(s) a receber existente(s)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <span>Vincular CT-e</span>
+              {linkedFreights.length > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                  {linkedFreights.length}
+                </span>
+              )}
+            </Button>
             <Button
               type="button"
               onClick={handleXmlButtonClick}

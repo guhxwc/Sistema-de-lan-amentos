@@ -466,13 +466,13 @@ export const ReceivablesView: React.FC = () => {
             <div className="flex items-center gap-3">
               <Button
                 onClick={() => setIsAddThirdPartyOpen(true)}
-                variant="secondary"
+                variant="outline"
                 size="sm"
-                className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                className="text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 shadow-sm transition-all flex items-center gap-2"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 mr-2"
+                  className="h-4 w-4 text-slate-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -484,7 +484,7 @@ export const ReceivablesView: React.FC = () => {
                     d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.084-1.284-.24-1.88M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.084-1.284.24-1.88M12 12a4 4 0 100-8 4 4 0 000 8z"
                   />
                 </svg>
-                Adicionar Terceiro (MDF-e)
+                Vincular a Terceiro (MDF-e)
               </Button>
               {inboxCtes.length > 0 && (
                 <div className="relative">
