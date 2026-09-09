@@ -6,6 +6,7 @@ import { ThirdPartySummaryCards } from '../thirdPartyFreights/ThirdPartySummaryC
 import { ThirdPartyFreightForm } from '../thirdPartyFreights/ThirdPartyFreightForm';
 import { ThirdPartyFreightsTable } from '../thirdPartyFreights/ThirdPartyFreightsTable';
 import { EditThirdPartyFreightModal } from '../thirdPartyFreights/EditThirdPartyFreightModal';
+import { ThirdPartyFreightDetailsModal } from '../thirdPartyFreights/ThirdPartyFreightDetailsModal';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { Select } from '../ui/Select';
@@ -72,6 +73,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
   const [savedDestinations, setSavedDestinations] = useState<string[]>([]);
 
   const [editingFreight, setEditingFreight] = useState<ThirdPartyFreight | null>(null);
+  const [viewingFreight, setViewingFreight] = useState<ThirdPartyFreight | null>(null);
   const [selectedFreights, setSelectedFreights] = useState<Set<string>>(new Set());
   const [isProcessingXml, setIsProcessingXml] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('todos');
@@ -575,6 +577,7 @@ export const ThirdPartyFreightsView: React.FC = () => {
                 onEdit={setEditingFreight}
                 onDelete={handleDeleteFreight}
                 onSetAsPaid={handleSetAsPaid}
+                onViewDetails={setViewingFreight}
             />
         </div>
       </main>
@@ -587,6 +590,12 @@ export const ThirdPartyFreightsView: React.FC = () => {
           savedLicensePlates={savedLicensePlates}
           savedOrigins={savedOrigins}
           savedDestinations={savedDestinations}
+        />
+      )}
+      {viewingFreight && (
+        <ThirdPartyFreightDetailsModal 
+          freight={viewingFreight} 
+          onClose={() => setViewingFreight(null)} 
         />
       )}
     </div>

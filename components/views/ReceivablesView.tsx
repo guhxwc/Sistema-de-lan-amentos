@@ -224,7 +224,7 @@ export const ReceivablesView: React.FC = () => {
     }).length;
   }, [freights]);
 
-  const handleXmlUpload = useCallback(async (files: FileList | null) => {
+  const handleXmlUpload = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
     
     setIsProcessingXml(true);
@@ -269,19 +269,24 @@ export const ReceivablesView: React.FC = () => {
         }
       }
 
-      setNewFreight((prev) => ({
-        ...prev,
-        cte: combinedCtes.join(", ") || prev.cte,
-        date: firstDate || prev.date,
-        client: firstClient || prev.client,
-        origin: firstOrigin || prev.origin,
-        destination: firstDestination || prev.destination,
-        uf_origin: firstUfOrigin || prev.uf_origin,
-        uf_destination: firstUfDestination || prev.uf_destination,
-        toll_value: totalTollValue > 0 ? totalTollValue : prev.toll_value,
-        cargo_value: totalCargoValue > 0 ? totalCargoValue : prev.cargo_value,
-        total_value: totalFreightValue > 0 ? totalFreightValue : prev.total_value,
-      }));
+      setNewFreight((prev) => {
+        const existingCtes = (prev.cte || "").split(/[,/]/).map(c => c.trim()).filter(Boolean);
+        const allCtes = Array.from(new Set([...existingCtes, ...combinedCtes]));
+
+        return {
+          ...prev,
+          cte: allCtes.join(", ") || prev.cte,
+          date: firstDate || prev.date,
+          client: firstClient || prev.client,
+          origin: firstOrigin || prev.origin,
+          destination: firstDestination || prev.destination,
+          uf_origin: firstUfOrigin || prev.uf_origin,
+          uf_destination: firstUfDestination || prev.uf_destination,
+          toll_value: (Number(prev.toll_value) || 0) + totalTollValue,
+          cargo_value: (Number(prev.cargo_value) || 0) + totalCargoValue,
+          total_value: (Number(prev.total_value) || 0) + totalFreightValue,
+        };
+      });
 
       alert("Dados do XML preenchidos com sucesso!");
     } catch (error: any) {

@@ -12,6 +12,7 @@ interface ThirdPartyFreightsTableProps {
   onEdit: (freight: ThirdPartyFreight) => void;
   onDelete: (id: string) => void;
   onSetAsPaid: (id: string) => void;
+  onViewDetails?: (freight: ThirdPartyFreight) => void;
 }
 
 const formatDate = (dateString: string) => {
@@ -29,7 +30,8 @@ export const ThirdPartyFreightsTable: React.FC<ThirdPartyFreightsTableProps> = (
   onToggleSelectAll,
   onEdit, 
   onDelete, 
-  onSetAsPaid 
+  onSetAsPaid,
+  onViewDetails
 }) => {
   const allSelected = freights.length > 0 && selectedFreights.size === freights.length;
 
@@ -89,7 +91,11 @@ export const ThirdPartyFreightsTable: React.FC<ThirdPartyFreightsTableProps> = (
                 }
                 
                 return (
-                    <tr key={freight.id} className={`border-b transition-colors duration-200 ${rowBaseClass}`}>
+                    <tr 
+                        key={freight.id} 
+                        className={`border-b transition-colors duration-200 cursor-pointer ${rowBaseClass}`}
+                        onDoubleClick={() => onViewDetails?.(freight)}
+                    >
                         <td className="px-4 py-2 w-4">
                             <div className="flex items-center">
                                 <input 

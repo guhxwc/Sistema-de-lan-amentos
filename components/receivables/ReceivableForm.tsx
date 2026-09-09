@@ -14,7 +14,7 @@ interface ReceivableFormProps {
   savedClients: string[];
   savedOrigins: string[];
   savedDestinations: string[];
-  onXmlUpload: (files: FileList | null) => void;
+  onXmlUpload: (files: File[]) => void;
   isProcessingXml: boolean;
 }
 
@@ -47,7 +47,10 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      onXmlUpload(e.target.files);
+      // Converte FileList para Array antes de limpar o input.
+      // O FileList é "vivo", se limparmos o input, a lista esvazia e buga o processamento async.
+      const filesArray = Array.from(e.target.files);
+      onXmlUpload(filesArray);
       e.target.value = ""; // Reset file input
     }
   };

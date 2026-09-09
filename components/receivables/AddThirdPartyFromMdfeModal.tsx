@@ -77,16 +77,20 @@ export const AddThirdPartyFromMdfeModal: React.FC<AddThirdPartyFromMdfeModalProp
       // Pré-preenche o formulário: reaproveita origem/destino/valor do CT-e vinculado
       // quando encontrado; senão usa o que veio do próprio MDF-e.
       const matchedReceivables = foundMatches.filter((m) => m.receivable).map((m) => m.receivable!);
-      const sumMatchedValue = matchedReceivables.reduce((a, r) => a + (Number(r.total_value) || 0), 0);
+      
+      // Remove duplicatas (mesmo frete a receber vinculado a múltiplos CT-es do MDF-e)
+      const uniqueReceivables = Array.from(new Map(matchedReceivables.map(r => [r.id, r])).values());
+
+      const sumMatchedValue = uniqueReceivables.reduce((a, r) => a + (Number(r.total_value) || 0), 0);
       const uniqueDestinations = Array.from(
-        new Set(matchedReceivables.map((r) => r.destination).filter(Boolean)),
+        new Set(uniqueReceivables.map((r) => r.destination).filter(Boolean)),
       );
 
       setDriver((data.driver || "").toUpperCase());
       setLicensePlate((data.license_plate || "").toUpperCase());
       setDate(data.date || new Date().toISOString().split("T")[0]);
       setOrigin(
-        (matchedReceivables[0]?.origin || data.origin || "").toUpperCase(),
+        (uniqueReceivables[0]?.origin || data.origin || "").toUpperCase(),
       );
       setDestination(
         uniqueDestinations.length > 1
