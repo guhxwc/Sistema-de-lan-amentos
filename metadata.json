@@ -1,5 +1,6 @@
 {
   "name": "Sistema de Lançamentos de Viagens",
   "description": "Um sistema moderno para transportadoras gerenciarem lançamentos de viagens, incluindo fretes, despesas, abastecimentos e lucros.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

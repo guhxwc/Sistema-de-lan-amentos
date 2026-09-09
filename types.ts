@@ -133,6 +133,17 @@ export interface ThirdPartyFreight {
   toll_value: number | "";
   advance_payment: number | "";
   status: "Pendente" | "Pago" | "Parcial";
+  mdfe_number?: string;
+  mdfe_key?: string;
+  created_at?: string;
+}
+
+export interface ThirdPartyFreightCte {
+  id: string;
+  third_party_freight_id: string;
+  cte_key?: string;
+  cte_number?: string;
+  receivable_freight_id?: string | null;
   created_at?: string;
 }
 

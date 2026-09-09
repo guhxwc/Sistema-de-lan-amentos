@@ -7,7 +7,12 @@ import {
   calculateFreightBreakdown,
   getSeguroConfig,
 } from "../../lib/fiscalCalculations";
-import type { ReceivableFreight, Trip, ThirdPartyFreight } from "../../types";
+import type {
+  ReceivableFreight,
+  Trip,
+  ThirdPartyFreight,
+  ThirdPartyFreightCte,
+} from "../../types";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -104,6 +109,7 @@ export const OverviewView: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [thirdParty, setThirdParty] = useState<ThirdPartyFreight[]>([]);
   const [receivables, setReceivables] = useState<ReceivableFreight[]>([]);
+  const [thirdPartyCtes, setThirdPartyCtes] = useState<ThirdPartyFreightCte[]>([]);
 
   // Padrão: Abre sempre filtrando no mês e ano atuais
   const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -116,14 +122,16 @@ export const OverviewView: React.FC = () => {
     setLoading(true);
     try {
       await loadFiscalTables();
-      const [tripsRes, thirdRes, recRes] = await Promise.all([
+      const [tripsRes, thirdRes, recRes, ctesRes] = await Promise.all([
         supabase.from("trips").select("*"),
         supabase.from("third_party_freights").select("*"),
         supabase.from("receivable_freights").select("*"),
+        supabase.from("third_party_freight_ctes").select("*"),
       ]);
       setTrips(tripsRes.data || []);
       setThirdParty(thirdRes.data || []);
       setReceivables(recRes.data || []);
+      setThirdPartyCtes(ctesRes.data || []);
     } catch (err) {
       console.error("Erro ao carregar Visão Geral:", err);
     } finally {
@@ -137,6 +145,7 @@ export const OverviewView: React.FC = () => {
       "trips",
       "third_party_freights",
       "receivable_freights",
+      "third_party_freight_ctes",
     ].map((table) =>
       supabase
         .channel(`${table}-overview-realtime`)
@@ -203,29 +212,72 @@ export const OverviewView: React.FC = () => {
     return { freightsTotal, expensesTotal, dieselTotal, maintenanceTotal, net };
   }, [trips, inPeriod]);
 
+  // ---- Cruzamento CT-e: quanto foi pago a terceiros por frete já lançado em
+  // Fretes a Receber (via CT-e referenciado no MDF-e do terceiro). Isso evita contar
+  // a mesma receita duas vezes (uma em Fretes a Receber, outra em Terceiros). ----
+  const { paidToThirdPartyByReceivable, linkedThirdPartyIds } = useMemo(() => {
+    const linksByThirdParty = new Map<string, ThirdPartyFreightCte[]>();
+    thirdPartyCtes.forEach((link) => {
+      const arr = linksByThirdParty.get(link.third_party_freight_id) || [];
+      arr.push(link);
+      linksByThirdParty.set(link.third_party_freight_id, arr);
+    });
+
+    const paidMap = new Map<string, number>();
+    const linkedIds = new Set<string>();
+
+    thirdParty.forEach((tp) => {
+      const links = linksByThirdParty.get(tp.id) || [];
+      const linkedReceivableIds = links
+        .map((l) => l.receivable_freight_id)
+        .filter((id): id is string => !!id);
+      if (linkedReceivableIds.length === 0) return;
+
+      linkedIds.add(tp.id);
+      const paid = Number(tp.paid_freight_value) || 0;
+      const share = paid / linkedReceivableIds.length;
+      linkedReceivableIds.forEach((rid) => {
+        paidMap.set(rid, (paidMap.get(rid) || 0) + share);
+      });
+    });
+
+    return { paidToThirdPartyByReceivable: paidMap, linkedThirdPartyIds: linkedIds };
+  }, [thirdParty, thirdPartyCtes]);
+
   // ---- Terceiros ----
+  // Apenas fretes de terceiro SEM CT-e vinculado entram no líquido/KPI: os vinculados já
+  // têm o valor pago descontado diretamente no líquido do frete em Fretes a Receber, então
+  // contá-los aqui de novo duplicaria a receita e o custo.
   const terceirosData = useMemo(() => {
     let companyTotal = 0,
       paidTotal = 0,
-      tollTotal = 0;
+      tollTotal = 0,
+      linkedPaidTotal = 0,
+      linkedCount = 0;
     thirdParty
       .filter((f) => inPeriod(f.date))
       .forEach((f) => {
+        if (linkedThirdPartyIds.has(f.id)) {
+          linkedPaidTotal += Number(f.paid_freight_value) || 0;
+          linkedCount += 1;
+          return;
+        }
         companyTotal += Number(f.company_freight_value) || 0;
         paidTotal += Number(f.paid_freight_value) || 0;
         tollTotal += Number(f.toll_value) || 0;
       });
     const net = companyTotal - (paidTotal + tollTotal);
-    return { companyTotal, paidTotal, tollTotal, net };
-  }, [thirdParty, inPeriod]);
+    return { companyTotal, paidTotal, tollTotal, net, linkedPaidTotal, linkedCount };
+  }, [thirdParty, inPeriod, linkedThirdPartyIds]);
 
-  // ---- Fretes a Receber (com ICMS + Seguro RCTR-C + Pedágio) ----
+  // ---- Fretes a Receber (com ICMS + Seguro RCTR-C + Pedágio + terceiro vinculado) ----
   const receivablesData = useMemo(() => {
     const filtered = receivables.filter((r) => inPeriod(r.date));
     let grossTotal = 0,
       icmsTotal = 0,
       seguroTotal = 0,
       tollTotal = 0,
+      thirdPartyTotal = 0,
       netTotal = 0;
     const breakdown = filtered.map((freight) => {
       const total = Number(freight.total_value) || 0;
@@ -236,22 +288,26 @@ export const OverviewView: React.FC = () => {
         freight.toll_value,
         freight.cargo_value,
       );
+      const paidToThirdParty = paidToThirdPartyByReceivable.get(freight.id) || 0;
+      const netValue = result.netValue - paidToThirdParty;
       grossTotal += total;
       icmsTotal += result.icms.valor;
       seguroTotal += result.seguro.total;
       tollTotal += result.toll;
-      netTotal += result.netValue;
-      return { freight, result };
+      thirdPartyTotal += paidToThirdParty;
+      netTotal += netValue;
+      return { freight, result, paidToThirdParty, netValue };
     });
     return {
       grossTotal,
       icmsTotal,
       seguroTotal,
       tollTotal,
+      thirdPartyTotal,
       net: netTotal,
       breakdown,
     };
-  }, [receivables, inPeriod]);
+  }, [receivables, inPeriod, paidToThirdPartyByReceivable]);
 
   const totalConsolidado =
     frotaData.net + terceirosData.net + receivablesData.net;
@@ -628,6 +684,14 @@ export const OverviewView: React.FC = () => {
                     }
                   />
                 </div>
+                {terceirosData.linkedCount > 0 && (
+                  <p className="text-xs text-slate-400 mt-3">
+                    +{terceirosData.linkedCount} frete(s) de terceiro vinculado(s) a CT-e de Fretes a
+                    Receber ({formatCurrency(terceirosData.linkedPaidTotal)} pagos) — já descontados
+                    diretamente do líquido do frete correspondente ali embaixo, não somados aqui para
+                    não duplicar a receita.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -673,7 +737,7 @@ export const OverviewView: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                   <MiniStat
                     label="Bruto"
                     value={formatCurrency(receivablesData.grossTotal)}
@@ -692,6 +756,11 @@ export const OverviewView: React.FC = () => {
                     label="Pedágio"
                     value={formatCurrency(receivablesData.tollTotal)}
                     colorClass="text-orange-600"
+                  />
+                  <MiniStat
+                    label="Pago a Terceiro"
+                    value={formatCurrency(receivablesData.thirdPartyTotal)}
+                    colorClass="text-red-600"
                   />
                   <MiniStat
                     label="Líquido"
@@ -723,6 +792,7 @@ export const OverviewView: React.FC = () => {
                         <th className="px-3 py-2 text-right">ICMS</th>
                         <th className="px-3 py-2 text-right">Seguro</th>
                         <th className="px-3 py-2 text-right">Pedágio</th>
+                        <th className="px-3 py-2 text-right">Pago Terceiro</th>
                         <th className="px-3 py-2 text-right">Líquido</th>
                       </tr>
                     </thead>
@@ -730,14 +800,14 @@ export const OverviewView: React.FC = () => {
                       {receivablesData.breakdown.length === 0 && (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             className="px-3 py-6 text-center text-slate-400"
                           >
                             Nenhum frete no período selecionado.
                           </td>
                         </tr>
                       )}
-                      {receivablesData.breakdown.map(({ freight, result }) => (
+                      {receivablesData.breakdown.map(({ freight, result, paidToThirdParty, netValue }) => (
                         <tr key={freight.id} className="hover:bg-slate-50">
                           <td className="px-3 py-2 whitespace-nowrap text-slate-600">
                             {freight.date}
@@ -751,6 +821,11 @@ export const OverviewView: React.FC = () => {
                             <span className="block text-[11px] text-slate-400">
                               {freight.origin} → {freight.destination}
                             </span>
+                            {paidToThirdParty > 0 && (
+                              <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/70">
+                                Subcontratado
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right font-medium">
                             {formatCurrency(Number(freight.total_value) || 0)}
@@ -767,14 +842,17 @@ export const OverviewView: React.FC = () => {
                           <td className="px-3 py-2 text-right text-orange-600">
                             {formatCurrency(result.toll)}
                           </td>
+                          <td className="px-3 py-2 text-right text-red-600">
+                            {paidToThirdParty > 0 ? formatCurrency(paidToThirdParty) : "—"}
+                          </td>
                           <td
-                            className={`px-3 py-2 text-right font-bold ${result.netValue >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                            className={`px-3 py-2 text-right font-bold ${netValue >= 0 ? "text-emerald-600" : "text-red-600"}`}
                           >
-                            {formatCurrency(result.netValue)}
+                            {formatCurrency(netValue)}
                             {Number(freight.total_value) > 0 && (
                               <span className="block text-[11px] font-semibold text-slate-400">
                                 {(
-                                  (result.netValue /
+                                  (netValue /
                                     Number(freight.total_value)) *
                                   100
                                 ).toFixed(1)}

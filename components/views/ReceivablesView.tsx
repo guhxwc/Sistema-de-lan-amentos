@@ -8,6 +8,7 @@ import { ReceivablesTable } from "../receivables/ReceivablesTable";
 import { ReceivableFilters } from "../receivables/ReceivableFilters";
 import { EditFreightModal } from "../receivables/EditFreightModal";
 import { CteInboxModal } from "../receivables/CteInboxModal";
+import { AddThirdPartyFromMdfeModal } from "../receivables/AddThirdPartyFromMdfeModal";
 import { Button } from "../ui/Button";
 
 const getInitialFreight = (): ReceivableFreight => ({
@@ -48,6 +49,8 @@ export const ReceivablesView: React.FC = () => {
   const [selectedFreights, setSelectedFreights] = useState<Set<string>>(
     new Set(),
   );
+
+  const [isAddThirdPartyOpen, setIsAddThirdPartyOpen] = useState(false);
 
   // Inbox States
   const [isInboxOpen, setIsInboxOpen] = useState(false);
@@ -461,6 +464,28 @@ export const ReceivablesView: React.FC = () => {
               Controle de Fretes - Contas a Receber
             </h1>
             <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setIsAddThirdPartyOpen(true)}
+                variant="secondary"
+                size="sm"
+                className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.084-1.284-.24-1.88M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.084-1.284.24-1.88M12 12a4 4 0 100-8 4 4 0 000 8z"
+                  />
+                </svg>
+                Adicionar Terceiro (MDF-e)
+              </Button>
               {inboxCtes.length > 0 && (
                 <div className="relative">
                   <Button
@@ -567,6 +592,12 @@ export const ReceivablesView: React.FC = () => {
           savedClients={savedClients}
           savedOrigins={savedOrigins}
           savedDestinations={savedDestinations}
+        />
+      )}
+      {isAddThirdPartyOpen && (
+        <AddThirdPartyFromMdfeModal
+          onClose={() => setIsAddThirdPartyOpen(false)}
+          onSaved={() => {}}
         />
       )}
       {isInboxOpen && (

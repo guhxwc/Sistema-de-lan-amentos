@@ -1,8 +1,14 @@
+export interface MdfeCteRef {
+  chCTe: string; // chave de acesso completa (44 dígitos)
+  cte_number: string; // número do CT-e extraído da chave (sem zeros à esquerda)
+}
+
 export interface ParsedXmlData {
   type: "CTe" | "MDFe" | "NFe" | "Unknown";
   cte?: string;
   nfe?: string;
   mdfe?: string;
+  mdfe_key?: string;
   date?: string;
   client?: string;
   origin?: string;
@@ -12,11 +18,23 @@ export interface ParsedXmlData {
   toll_value?: number;
   cargo_value?: number;
   total_value?: number;
+  contract_value?: number; // MDF-e: infANTT/infPag/vContrato — valor contratado com o transportador
   weight?: number;
   driver?: string;
+  driver_cpf?: string;
   license_plate?: string;
   delivery_location?: string;
   company?: string;
+  cte_list?: MdfeCteRef[]; // MDF-e: CT-e(s) referenciados no manifesto
+}
+
+// Extrai o número do CT-e (nCT) a partir da chave de acesso de 44 dígitos.
+// Layout: cUF(2) + AAMM(4) + CNPJ(14) + mod(2) + serie(3) + nCT(9) + tpEmis(1) + cCT(8) + cDV(1)
+export function getCteNumberFromChave(chave: string): string {
+  const clean = (chave || "").replace(/\D/g, "");
+  if (clean.length !== 44) return "";
+  const nCT = clean.substring(25, 34);
+  return String(parseInt(nCT, 10));
 }
 
 export function parseFiscalXml(xmlString: string): ParsedXmlData {
@@ -275,13 +293,21 @@ export function parseFiscalXml(xmlString: string): ParsedXmlData {
   // -------------------------
   if (data.type === "MDFe") {
     data.mdfe = getTagContent("nMDF");
+    data.mdfe_key =
+      getTagContent("chMDFe") ||
+      doc.getElementsByTagName("infMDFe")[0]?.getAttribute("Id")?.replace(/^MDFe/, "") ||
+      undefined;
     data.origin = getTagContent("xMunCarrega") || "";
     data.destination = getTagContent("xMunDescarga") || "";
+
+    data.uf_origin = (getTagContent("UFIni") || "").toUpperCase() || undefined;
+    data.uf_destination = (getTagContent("UFFim") || "").toUpperCase() || undefined;
 
     data.driver =
       getTagFromPath(["condutor", "xNome"]) ||
       getTagFromPath(["moto", "xNome"]) ||
       getTagFromPath(["prop", "xNome"]);
+    data.driver_cpf = getTagFromPath(["condutor", "CPF"]);
     data.license_plate =
       getTagFromPath(["veicTracao", "placa"]) ||
       getTagFromPath(["veic", "placa"]) ||
@@ -293,6 +319,39 @@ export function parseFiscalXml(xmlString: string): ParsedXmlData {
     data.weight = parseFloat(
       getTagFromPath(["tot", "qCarga"]) || getTagContent("qCarga") || "0",
     );
+
+    // Data de início da viagem (usada como data do lançamento do frete de terceiro)
+    const dhIniViagem = getTagContent("dhIniViagem");
+    if (dhIniViagem) data.date = dhIniViagem.split("T")[0];
+
+    // Pedágio: soma de todos os <disp><vValePed> dentro de valePed
+    const dispNodes = Array.from(doc.getElementsByTagName("disp"));
+    let tollSum = 0;
+    dispNodes.forEach((disp) => {
+      const v = parseFloat(disp.getElementsByTagName("vValePed")[0]?.textContent || "0");
+      if (!isNaN(v)) tollSum += v;
+    });
+    if (tollSum > 0) data.toll_value = tollSum;
+
+    // Valor contratado com o transportador (infANTT/infPag/vContrato) — sugestão para
+    // o valor pago ao motorista/terceiro
+    const vContrato = getTagFromPath(["infPag", "vContrato"]);
+    if (vContrato) {
+      const parsed = parseFloat(vContrato);
+      if (!isNaN(parsed) && parsed > 0) data.contract_value = parsed;
+    }
+
+    // CT-e(s) referenciados no manifesto — podem existir vários <infMunDescarga>,
+    // cada um com um ou mais <infCTe><chCTe>
+    const chCteNodes = Array.from(doc.getElementsByTagName("chCTe"));
+    const cteList: MdfeCteRef[] = [];
+    chCteNodes.forEach((node) => {
+      const chCTe = (node.textContent || "").trim();
+      if (chCTe) {
+        cteList.push({ chCTe, cte_number: getCteNumberFromChave(chCTe) });
+      }
+    });
+    if (cteList.length > 0) data.cte_list = cteList;
 
     // Se houver informacoes do CTE no MDFe e a gente precisar como CTE
     // ou destinatario de MDF-e pode ter coisas
