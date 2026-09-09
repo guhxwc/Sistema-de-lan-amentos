@@ -71,6 +71,9 @@ export const AddThirdPartyFromMdfeModal: React.FC<AddThirdPartyFromMdfeModalProp
       // quando encontrado; senão usa o que veio do próprio MDF-e.
       const matchedReceivables = foundMatches.filter((m) => m.receivable).map((m) => m.receivable!);
       const sumMatchedValue = matchedReceivables.reduce((a, r) => a + (Number(r.total_value) || 0), 0);
+      const uniqueDestinations = Array.from(
+        new Set(matchedReceivables.map((r) => r.destination).filter(Boolean)),
+      );
 
       setDriver((data.driver || "").toUpperCase());
       setLicensePlate((data.license_plate || "").toUpperCase());
@@ -79,7 +82,9 @@ export const AddThirdPartyFromMdfeModal: React.FC<AddThirdPartyFromMdfeModalProp
         (matchedReceivables[0]?.origin || data.origin || "").toUpperCase(),
       );
       setDestination(
-        (matchedReceivables[0]?.destination || data.destination || "").toUpperCase(),
+        uniqueDestinations.length > 1
+          ? uniqueDestinations.join(" / ").toUpperCase()
+          : (uniqueDestinations[0] || data.destination || "").toUpperCase(),
       );
       setCompanyFreightValue(
         sumMatchedValue > 0 ? sumMatchedValue : (data.contract_value ?? ""),
@@ -210,8 +215,9 @@ export const AddThirdPartyFromMdfeModal: React.FC<AddThirdPartyFromMdfeModalProp
                 ))}
                 {matchedCount > 0 && (
                   <p className="text-xs text-slate-500 pt-1">
-                    O valor pago a este terceiro será descontado do líquido desse(s) frete(s) na Visão Geral,
-                    em vez de contar como receita separada.
+                    {matchedCount > 1
+                      ? "Frete fracionado: o valor pago será rateado proporcionalmente ao valor de cada CT-e e descontado do líquido de cada frete correspondente na Visão Geral."
+                      : "O valor pago a este terceiro será descontado do líquido desse frete na Visão Geral, em vez de contar como receita separada."}
                   </p>
                 )}
               </div>

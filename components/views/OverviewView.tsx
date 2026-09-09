@@ -214,7 +214,10 @@ export const OverviewView: React.FC = () => {
 
   // ---- Cruzamento CT-e: quanto foi pago a terceiros por frete já lançado em
   // Fretes a Receber (via CT-e referenciado no MDF-e do terceiro). Isso evita contar
-  // a mesma receita duas vezes (uma em Fretes a Receber, outra em Terceiros). ----
+  // a mesma receita duas vezes (uma em Fretes a Receber, outra em Terceiros).
+  // Em frete fracionado (um MDF-e com vários CT-e de clientes diferentes), o valor
+  // pago ao terceiro é rateado PROPORCIONALMENTE ao valor de cada CT-e vinculado —
+  // não dividido em partes iguais, já que cada CT-e pode ter um peso bem diferente. ----
   const { paidToThirdPartyByReceivable, linkedThirdPartyIds } = useMemo(() => {
     const linksByThirdParty = new Map<string, ThirdPartyFreightCte[]>();
     thirdPartyCtes.forEach((link) => {
@@ -222,6 +225,9 @@ export const OverviewView: React.FC = () => {
       arr.push(link);
       linksByThirdParty.set(link.third_party_freight_id, arr);
     });
+
+    const receivableValueById = new Map<string, number>();
+    receivables.forEach((r) => receivableValueById.set(r.id, Number(r.total_value) || 0));
 
     const paidMap = new Map<string, number>();
     const linkedIds = new Set<string>();
@@ -235,14 +241,24 @@ export const OverviewView: React.FC = () => {
 
       linkedIds.add(tp.id);
       const paid = Number(tp.paid_freight_value) || 0;
-      const share = paid / linkedReceivableIds.length;
+
+      // Rateio proporcional ao valor de cada CT-e vinculado (frete fracionado).
+      // Se nenhum CT-e vinculado tiver valor (ex: frete apagado), cai para rateio igual.
+      const totalValue = linkedReceivableIds.reduce(
+        (a, id) => a + (receivableValueById.get(id) || 0),
+        0,
+      );
+
       linkedReceivableIds.forEach((rid) => {
+        const value = receivableValueById.get(rid) || 0;
+        const share =
+          totalValue > 0 ? paid * (value / totalValue) : paid / linkedReceivableIds.length;
         paidMap.set(rid, (paidMap.get(rid) || 0) + share);
       });
     });
 
     return { paidToThirdPartyByReceivable: paidMap, linkedThirdPartyIds: linkedIds };
-  }, [thirdParty, thirdPartyCtes]);
+  }, [thirdParty, thirdPartyCtes, receivables]);
 
   // ---- Terceiros ----
   // Apenas fretes de terceiro SEM CT-e vinculado entram no líquido/KPI: os vinculados já
