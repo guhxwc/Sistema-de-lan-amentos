@@ -247,10 +247,18 @@ export function parseFiscalXml(xmlString: string): ParsedXmlData {
 
     data.weight = parseFloat(pesoB || qCarga || "0");
 
-    const chaveNFe = getTagFromPath(["infNFe", "chave"]);
-    if (chaveNFe && chaveNFe.length === 44) {
-      let nNfe = chaveNFe.substring(25, 34);
-      data.nfe = parseInt(nNfe, 10).toString();
+    const infNFeElements = Array.from(doc.getElementsByTagName("infNFe"));
+    const nfeNumbers: string[] = [];
+    infNFeElements.forEach((infNFe) => {
+      const chaveNode = infNFe.getElementsByTagName("chave")[0];
+      if (chaveNode && chaveNode.textContent && chaveNode.textContent.length === 44) {
+        const nNfe = chaveNode.textContent.substring(25, 34);
+        nfeNumbers.push(parseInt(nNfe, 10).toString());
+      }
+    });
+
+    if (nfeNumbers.length > 0) {
+      data.nfe = nfeNumbers.join(", ");
     }
 
     const vCargaAverb = getTagFromPath(["infCarga", "vCargaAverb"]);

@@ -143,7 +143,9 @@ export const FiscalNotesView: React.FC = () => {
       const parsedData = parseFiscalXml(xmlContent);
       return {
         company: parsedData.company || '',
-        nf_number: parsedData.nfe ? parsedData.nfe.replace(/^0+/, '') : '',
+        nf_number: parsedData.nfe 
+          ? parsedData.nfe.split(',').map(n => n.trim().replace(/^0+/, '')).join(', ')
+          : '',
         delivery_location: parsedData.delivery_location || '',
         shipping_date: parsedData.date || ''
       };
@@ -210,13 +212,10 @@ export const FiscalNotesView: React.FC = () => {
                 
                 const data = await extractDataFromXml(xmlFiles[i]);
                 if (data && data.company && data.nf_number) {
-                     // Limpar zeros à esquerda se houver
-                     const cleanNfNumber = data.nf_number.replace(/^0+/, '');
-
                      // VERIFICAÇÃO DE DUPLICIDADE (ZIP)
                      // Verifica se já existe na base ou se já foi adicionado na lista de inserção atual
-                     const isDuplicateInDb = notes.some(n => n.nf_number === cleanNfNumber);
-                     const isDuplicateInBatch = notesToAdd.some(n => n.nf_number === cleanNfNumber);
+                     const isDuplicateInDb = notes.some(n => n.nf_number === data.nf_number);
+                     const isDuplicateInBatch = notesToAdd.some(n => n.nf_number === data.nf_number);
 
                      if (isDuplicateInDb || isDuplicateInBatch) {
                         duplicateCount++;
@@ -225,7 +224,7 @@ export const FiscalNotesView: React.FC = () => {
 
                      notesToAdd.push({
                         company: data.company.trim().toUpperCase(),
-                        nf_number: cleanNfNumber,
+                        nf_number: data.nf_number,
                         delivery_location: data.delivery_location?.trim().toUpperCase() || '',
                         shipping_date: data.shipping_date || new Date().toISOString().split('T')[0],
                         status: 'Pendente', // Padrão
