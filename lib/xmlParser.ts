@@ -263,7 +263,7 @@ export function parseFiscalXml(xmlString: string): ParsedXmlData {
 
     const vCargaAverb = getTagFromPath(["infCarga", "vCargaAverb"]);
     const vCarga = getTagFromPath(["infCarga", "vCarga"]);
-    const cargoValueRaw = vCargaAverb || vCarga;
+    const cargoValueRaw = vCarga || vCargaAverb;
     if (cargoValueRaw) {
       const parsedCargo = parseFloat(cargoValueRaw);
       if (!isNaN(parsedCargo) && parsedCargo > 0) {
