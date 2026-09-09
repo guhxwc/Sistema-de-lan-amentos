@@ -224,30 +224,69 @@ export const ReceivablesView: React.FC = () => {
     }).length;
   }, [freights]);
 
-  const handleXmlUpload = useCallback(async (file: File) => {
+  const handleXmlUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
     setIsProcessingXml(true);
     try {
-      const xmlContent = await file.text();
-      const parsedData = parseFiscalXml(xmlContent);
+      let combinedCtes: string[] = [];
+      let totalFreightValue = 0;
+      let totalCargoValue = 0;
+      let totalTollValue = 0;
+      
+      let firstDate = "";
+      let firstClient = "";
+      let firstOrigin = "";
+      let firstDestination = "";
+      let firstUfOrigin = "";
+      let firstUfDestination = "";
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const xmlContent = await file.text();
+        const parsedData = parseFiscalXml(xmlContent);
+
+        const cteStr = parsedData.cte || parsedData.mdfe || "";
+        if (cteStr) {
+           // Adiciona CT-es garantindo que não tenha duplicatas
+           const ctes = cteStr.split(/[,/]/).map(c => c.trim()).filter(Boolean);
+           ctes.forEach(c => {
+               if (!combinedCtes.includes(c)) combinedCtes.push(c);
+           });
+        }
+        
+        totalFreightValue += (parsedData.total_value || 0);
+        totalCargoValue += (parsedData.cargo_value || 0);
+        totalTollValue += (parsedData.toll_value || 0);
+
+        if (i === 0) {
+           firstDate = parsedData.date?.split("T")[0] || "";
+           firstClient = parsedData.client || parsedData.company || "";
+           firstOrigin = parsedData.origin || "";
+           firstDestination = parsedData.destination || "";
+           firstUfOrigin = parsedData.uf_origin || "";
+           firstUfDestination = parsedData.uf_destination || "";
+        }
+      }
 
       setNewFreight((prev) => ({
         ...prev,
-        cte: parsedData.cte || parsedData.mdfe || "",
-        date: parsedData.date?.split("T")[0] || prev.date,
-        client: parsedData.client || parsedData.company || "",
-        origin: parsedData.origin || "",
-        destination: parsedData.destination || "",
-        uf_origin: parsedData.uf_origin || prev.uf_origin,
-        uf_destination: parsedData.uf_destination || prev.uf_destination,
-        toll_value: parsedData.toll_value ?? prev.toll_value,
-        cargo_value: parsedData.cargo_value ?? prev.cargo_value,
-        total_value: parsedData.total_value || 0,
+        cte: combinedCtes.join(", ") || prev.cte,
+        date: firstDate || prev.date,
+        client: firstClient || prev.client,
+        origin: firstOrigin || prev.origin,
+        destination: firstDestination || prev.destination,
+        uf_origin: firstUfOrigin || prev.uf_origin,
+        uf_destination: firstUfDestination || prev.uf_destination,
+        toll_value: totalTollValue > 0 ? totalTollValue : prev.toll_value,
+        cargo_value: totalCargoValue > 0 ? totalCargoValue : prev.cargo_value,
+        total_value: totalFreightValue > 0 ? totalFreightValue : prev.total_value,
       }));
 
       alert("Dados do XML preenchidos com sucesso!");
     } catch (error: any) {
       console.error("Erro ao processar XML:", error);
-      alert("Erro ao processar o arquivo XML localmente.");
+      alert("Erro ao processar os arquivos XML localmente.");
     } finally {
       setIsProcessingXml(false);
     }

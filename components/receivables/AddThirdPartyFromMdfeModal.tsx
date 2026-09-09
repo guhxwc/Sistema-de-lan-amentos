@@ -56,12 +56,19 @@ export const AddThirdPartyFromMdfeModal: React.FC<AddThirdPartyFromMdfeModalProp
       const cteRefs = data.cte_list || [];
       const foundMatches: CteMatch[] = [];
       for (const ref of cteRefs) {
+        // Usa ilike para encontrar registros que possam conter múltiplos CT-es no mesmo campo, ex: "3229, 3230"
         const { data: rows } = await supabase
           .from("receivable_freights")
           .select("*")
-          .eq("cte", ref.cte_number)
-          .limit(1);
-        foundMatches.push({ ref, receivable: rows && rows.length > 0 ? rows[0] : null });
+          .ilike("cte", `%${ref.cte_number}%`);
+          
+        let matchedReceivable = null;
+        if (rows && rows.length > 0) {
+            // Em caso de múltiplos retornos (improvável se as chaves forem únicas na string), pega o primeiro
+            matchedReceivable = rows[0];
+        }
+        
+        foundMatches.push({ ref, receivable: matchedReceivable });
       }
 
       setParsed(data);

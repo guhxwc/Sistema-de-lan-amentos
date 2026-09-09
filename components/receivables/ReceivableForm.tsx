@@ -14,7 +14,7 @@ interface ReceivableFormProps {
   savedClients: string[];
   savedOrigins: string[];
   savedDestinations: string[];
-  onXmlUpload: (file: File) => void;
+  onXmlUpload: (files: FileList | null) => void;
   isProcessingXml: boolean;
 }
 
@@ -46,9 +46,8 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onXmlUpload(file);
+    if (e.target.files && e.target.files.length > 0) {
+      onXmlUpload(e.target.files);
       e.target.value = ""; // Reset file input
     }
   };
@@ -253,6 +252,7 @@ export const ReceivableForm: React.FC<ReceivableFormProps> = ({
               ref={fileInputRef}
               onChange={handleFileChange}
               accept=".xml"
+              multiple
               className="hidden"
             />
           </div>
